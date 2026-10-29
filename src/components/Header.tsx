@@ -35,8 +35,12 @@ export const Header: React.FC<HeaderProps> = ({
           }}
           className="flex items-center gap-2.5 whitespace-nowrap shrink-0 group select-none"
         >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-950/50 group-hover:scale-105 transition-transform">
-            <ShieldCheck className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-full overflow-hidden border border-amber-500/60 p-0.5 bg-slate-900 shadow-lg shadow-amber-950/40 group-hover:scale-105 transition-transform shrink-0">
+            <img
+              src="/logo-emblem.png"
+              alt="Logo Emblem"
+              className="w-full h-full object-cover rounded-full"
+            />
           </div>
           <div>
             <span className="text-xs sm:text-sm font-extrabold tracking-tight text-white whitespace-nowrap block uppercase">

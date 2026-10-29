@@ -167,14 +167,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 relative overflow-x-hidden">
-      {/* Background Watermark Logo */}
-      <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-[0.03] select-none overflow-hidden">
-        <div className="text-center space-y-4 transform -rotate-12 scale-125 sm:scale-150">
-          <ShieldCheck className="w-96 h-96 mx-auto text-emerald-400" />
-          <h1 className="text-6xl sm:text-8xl font-black font-mono tracking-tighter text-emerald-300 uppercase">
-            JADWAL STANDBY TEAM MBP DEPOTEL
-          </h1>
-        </div>
+      {/* Background Watermark Logo (Emblem) */}
+      <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-[0.07] select-none overflow-hidden p-4">
+        <img
+          src="/logo-emblem.png"
+          alt="JADWAL STANDBY TEAM MBP DEPOTEL Background Emblem"
+          className="w-[500px] h-[500px] sm:w-[700px] sm:h-[700px] object-contain drop-shadow-[0_0_50px_rgba(234,179,8,0.3)] animate-pulse duration-[5000ms]"
+        />
       </div>
 
       {/* Toast Notification Banner */}

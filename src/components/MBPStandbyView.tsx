@@ -387,26 +387,35 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
       {/* TOP CONTROL BAR & WHATSAPP BROADCAST LINK */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                JADWAL AKTIF
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsCalendarModalOpen(true)}
-                className="text-xs text-slate-300 font-mono font-semibold flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-emerald-500/60 transition-colors select-none cursor-pointer"
-              >
-                <CalendarIcon className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
-                {currentDayName.toUpperCase()}, {currentDateStr}
-              </button>
+          <div className="flex items-start gap-3.5">
+            <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-amber-500/80 p-0.5 bg-slate-950 shadow-xl shadow-amber-950/50 shrink-0 hidden sm:block">
+              <img
+                src="/logo-emblem.png"
+                alt="Logo Emblem"
+                className="w-full h-full object-cover rounded-full"
+              />
             </div>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight whitespace-pre-wrap">
-              {schedule.title}
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              <strong className="text-slate-300">*NOP SOUTHERN*</strong> — Ubah status personel dengan 1-klik atau kirim langsung via WhatsApp.
-            </p>
+            <div>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  JADWAL AKTIF
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCalendarModalOpen(true)}
+                  className="text-xs text-slate-300 font-mono font-semibold flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-emerald-500/60 transition-colors select-none cursor-pointer"
+                >
+                  <CalendarIcon className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
+                  {currentDayName.toUpperCase()}, {currentDateStr}
+                </button>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight whitespace-pre-wrap">
+                {schedule.title}
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                <strong className="text-slate-300">*NOP SOUTHERN*</strong> — Ubah status personel dengan 1-klik atau kirim langsung via WhatsApp.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
