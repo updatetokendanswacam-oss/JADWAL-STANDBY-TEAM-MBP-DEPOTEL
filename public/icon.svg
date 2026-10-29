@@ -3,15 +3,19 @@
   <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="#10b981" stroke-width="12" opacity="0.4"/>
   
   <!-- Outer Glow Circle -->
-  <circle cx="256" cy="256" r="200" fill="#047857" opacity="0.2"/>
+  <circle cx="256" cy="220" r="170" fill="#047857" opacity="0.2"/>
   
   <!-- Shield Shape -->
-  <path d="M256 72 L384 120 V248 C384 336 320 408 256 440 C192 408 128 336 128 248 V120 Z" fill="#059669" stroke="#10b981" stroke-width="12"/>
-  <path d="M256 96 L360 136 V248 C360 320 308 380 256 408 V96 Z" fill="#10b981" opacity="0.3"/>
+  <path d="M256 60 L370 100 V210 C370 290 310 350 256 380 C202 350 142 290 142 210 V100 Z" fill="#059669" stroke="#10b981" stroke-width="12"/>
+  <path d="M256 80 L346 114 V210 C346 276 298 328 256 352 V80 Z" fill="#10b981" opacity="0.3"/>
   
   <!-- Lightning Bolt Symbol -->
-  <path d="M272 144 L176 272 H256 L240 368 L336 240 H256 Z" fill="#ffffff" stroke="#34d399" stroke-width="4"/>
+  <path d="M270 120 L180 230 H256 L240 310 L330 200 H256 Z" fill="#ffffff" stroke="#34d399" stroke-width="4"/>
   
   <!-- Standby Dot -->
-  <circle cx="360" cy="120" r="28" fill="#10b981" stroke="#020617" stroke-width="8"/>
+  <circle cx="340" cy="100" r="24" fill="#10b981" stroke="#020617" stroke-width="6"/>
+
+  <!-- Brand Text -->
+  <text x="256" y="425" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="900" font-size="28" letter-spacing="2">STANDBY TEAM</text>
+  <text x="256" y="465" text-anchor="middle" fill="#34d399" font-family="system-ui, sans-serif" font-weight="900" font-size="34" letter-spacing="3">MBP DEPOTEL</text>
 </svg>

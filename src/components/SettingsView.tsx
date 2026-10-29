@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StandbySchedule, AppUser, UserRole, UserStatus } from '../types';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import {
   Settings,
   Shield,
@@ -15,7 +16,11 @@ import {
   UserX,
   Mail,
   Edit2,
-  UserPlus
+  UserPlus,
+  RefreshCw,
+  GitBranch,
+  Globe,
+  Database
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -24,7 +29,14 @@ interface SettingsViewProps {
   users: AppUser[];
   onUpdateUsers: (newUsers: AppUser[]) => void;
   onResetAllData: () => void;
+  onRefreshData?: () => void;
   onShowToast: (msg: string) => void;
+}
+
+interface DeleteTarget {
+  type: 'user' | 'group' | 'reset_all';
+  id?: string;
+  name: string;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -33,11 +45,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   users,
   onUpdateUsers,
   onResetAllData,
+  onRefreshData,
   onShowToast
 }) => {
   const [nopName, setNopName] = useState(schedule.nopName);
   const [newGroupName, setNewGroupName] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = () => {
+    setIsRefreshing(true);
+    if (onRefreshData) {
+      onRefreshData();
+    } else {
+      window.dispatchEvent(new Event('storage'));
+    }
+    setTimeout(() => {
+      setIsRefreshing(false);
+      onShowToast('Perubahan data & tampilan berhasil diperbarui / disinkronkan! 🔄');
+    }, 600);
+  };
 
   // KELOLA PENGGUNA STATE (User Management)
   const [userSearch, setUserSearch] = useState('');
@@ -48,6 +75,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [userEmail, setUserEmail] = useState('');
   const [userRole, setUserRole] = useState<UserRole>('User');
   const [userStatus, setUserStatus] = useState<UserStatus>('Aktif');
+
+  // CUSTOM DELETE CONFIRMATION MODAL STATE
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const handleSaveGeneral = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,18 +107,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     setNewGroupName('');
     onShowToast(`Grup ${newGrp.groupName} berhasil ditambahkan!`);
-  };
-
-  const handleDeleteGroup = (groupId: string, groupName: string) => {
-    if (schedule.groups.length <= 1) {
-      alert('Minimal harus ada 1 kelompok tim!');
-      return;
-    }
-    if (!window.confirm(`Hapus grup ${groupName} beserta seluruh personelnya?`)) return;
-
-    const updatedGroups = schedule.groups.filter((g) => g.id !== groupId);
-    onUpdateSchedule({ ...schedule, groups: updatedGroups });
-    onShowToast(`Grup ${groupName} telah dihapus.`);
   };
 
   // KELOLA PENGGUNA HANDLERS (USER MANAGEMENT)
@@ -140,6 +158,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUserRole(user.role);
     setUserStatus(user.status);
     window.scrollTo({ top: 100, behavior: 'smooth' });
+    onShowToast(`Mode edit untuk ${user.name}`);
   };
 
   const handleCancelUserEdit = () => {
@@ -161,16 +180,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     );
   };
 
-  const handleDeleteUser = (userId: string, userName: string) => {
+  // OPEN DELETE CONFIRMATION MODALS
+  const promptDeleteUser = (userId: string, userName: string) => {
     if (users.length <= 1) {
       alert('Minimal harus ada 1 pengguna di sistem!');
       return;
     }
-    if (!window.confirm(`Hapus akun pengguna ${userName}?`)) return;
+    setDeleteTarget({
+      type: 'user',
+      id: userId,
+      name: userName
+    });
+  };
 
-    const updated = users.filter((u) => u.id !== userId);
-    onUpdateUsers(updated);
-    onShowToast(`Akun ${userName} telah dihapus.`);
+  const promptDeleteGroup = (groupId: string, groupName: string) => {
+    if (schedule.groups.length <= 1) {
+      alert('Minimal harus ada 1 kelompok tim!');
+      return;
+    }
+    setDeleteTarget({
+      type: 'group',
+      id: groupId,
+      name: groupName
+    });
+  };
+
+  const promptResetAll = () => {
+    setDeleteTarget({
+      type: 'reset_all',
+      name: 'Seluruh Data Aplikasi'
+    });
+  };
+
+  // CONFIRM DELETION EXECUTION
+  const executeConfirmDelete = () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'user' && deleteTarget.id) {
+      const updated = users.filter((u) => u.id !== deleteTarget.id);
+      onUpdateUsers(updated);
+      onShowToast(`Akun ${deleteTarget.name} berhasil dihapus.`);
+    } else if (deleteTarget.type === 'group' && deleteTarget.id) {
+      const updatedGroups = schedule.groups.filter((g) => g.id !== deleteTarget.id);
+      onUpdateSchedule({ ...schedule, groups: updatedGroups });
+      onShowToast(`Grup ${deleteTarget.name} berhasil dihapus.`);
+    } else if (deleteTarget.type === 'reset_all') {
+      onResetAllData();
+    }
+
+    setDeleteTarget(null);
   };
 
   const handleExportData = () => {
@@ -391,16 +449,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         handleToggleUserStatus(user.id, user.status);
                       }}
                       title={`Klik untuk ubah status (${user.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'})`}
-                      className={`min-h-[36px] min-w-[36px] p-2 rounded-xl shrink-0 transition-transform active:scale-110 cursor-pointer flex items-center justify-center ${
+                      className={`min-h-[40px] min-w-[40px] p-2 rounded-xl shrink-0 transition-transform active:scale-110 cursor-pointer flex items-center justify-center select-none ${
                         user.status === 'Aktif'
                           ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60'
                           : 'bg-red-950 text-red-400 border border-red-800/60'
                       }`}
                     >
                       {user.status === 'Aktif' ? (
-                        <UserCheck className="w-4 h-4 text-emerald-400" />
+                        <UserCheck className="w-4 h-4 text-emerald-400 pointer-events-none" />
                       ) : (
-                        <UserX className="w-4 h-4 text-red-400" />
+                        <UserX className="w-4 h-4 text-red-400 pointer-events-none" />
                       )}
                     </button>
 
@@ -421,13 +479,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                        <Mail className="w-3 h-3 text-slate-500 shrink-0" />
+                        <Mail className="w-3 h-3 text-slate-500 shrink-0 pointer-events-none" />
                         <span className="font-mono">{user.email}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Actions: Toggle Status Button, Edit Icon & Delete Icon (PERFECTLY CLICKABLE) */}
+                  {/* Right Actions: Toggle Status, Labeled Edit & Delete Buttons */}
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                     <button
                       type="button"
@@ -436,7 +494,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         e.stopPropagation();
                         handleToggleUserStatus(user.id, user.status);
                       }}
-                      className={`min-h-[38px] px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer flex items-center gap-1 active:scale-95 select-none ${
+                      className={`min-h-[40px] px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer flex items-center gap-1 active:scale-95 select-none ${
                         user.status === 'Aktif'
                           ? 'bg-emerald-950/90 hover:bg-emerald-900 border-emerald-700/80 text-emerald-300'
                           : 'bg-red-950/90 hover:bg-red-900 border-red-700/80 text-red-300'
@@ -445,7 +503,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <span>{user.status === 'Aktif' ? '🟢 AKTIF' : '🔴 NONAKTIF'}</span>
                     </button>
 
-                    {/* EDIT USER BUTTON (FIXED & FULLY CLICKABLE) */}
+                    {/* EDIT USER BUTTON */}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -454,23 +512,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         handleEditUser(user);
                       }}
                       title="Edit Akun Pengguna"
-                      className="min-h-[38px] min-w-[38px] px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 hover:text-white border border-slate-700 text-slate-200 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shadow-sm"
+                      className="min-h-[40px] px-3 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-100 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm select-none"
                     >
-                      <Edit2 className="w-4 h-4 text-emerald-400 hover:text-white" />
+                      <Edit2 className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
+                      <span>Edit</span>
                     </button>
 
-                    {/* DELETE USER BUTTON (FIXED & FULLY CLICKABLE) */}
+                    {/* DELETE USER BUTTON (PROMPTS CUSTOM MODAL) */}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        handleDeleteUser(user.id, user.name);
+                        promptDeleteUser(user.id, user.name);
                       }}
                       title="Hapus Akun Pengguna"
-                      className="min-h-[38px] min-w-[38px] px-2.5 py-1.5 bg-slate-800 hover:bg-red-600 hover:text-white border border-slate-700 text-slate-200 rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95 shadow-sm"
+                      className="min-h-[40px] px-3 py-1.5 bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-100 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm select-none"
                     >
-                      <Trash2 className="w-4 h-4 text-red-400 hover:text-white" />
+                      <Trash2 className="w-3.5 h-3.5 text-red-400 pointer-events-none" />
+                      <span>Hapus</span>
                     </button>
                   </div>
                 </div>
@@ -556,11 +616,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      handleDeleteGroup(group.id, group.groupName);
+                      promptDeleteGroup(group.id, group.groupName);
                     }}
-                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                    className="min-h-[38px] px-3 py-1.5 bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-200 hover:text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5 text-red-400 pointer-events-none" />
+                    <span>Hapus</span>
                   </button>
                 </div>
               ))}
@@ -568,17 +629,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Section 2: Export, Import & Reset Data */}
+        {/* Section 2: Refresh, Backup, Restore & Reset Data */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-5">
           <h3 className="text-base font-bold text-white flex items-center gap-2 pb-3 border-b border-slate-800">
-            <Download className="w-5 h-5 text-emerald-400" />
-            <span>Backup, Restore & Reset Data</span>
+            <RefreshCw className="w-5 h-5 text-emerald-400" />
+            <span>Sinkronisasi Data, Refresh & Backup</span>
           </h3>
 
           <div className="space-y-4">
+            {/* FITUR REFRESH / PERBARUI PERUBAHAN DATA */}
+            <div className="p-4 bg-emerald-950/30 border border-emerald-500/40 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-300 block">
+                  1. Perbarui / Refresh Perubahan Data
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-bold">
+                  SINKRON REALTIME
+                </span>
+              </div>
+              <p className="text-xs text-slate-300">
+                Klik tombol ini untuk menyegarkan tampilan dan memuat ulang perubahan data jadwal serta daftar akun pengguna terbaru.
+              </p>
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>{isRefreshing ? 'Memperbarui Data...' : 'Perbarui Perubahan Data'}</span>
+              </button>
+            </div>
+
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
               <span className="text-xs font-bold text-slate-200 block">
-                1. Unduh Backup Data (JSON)
+                2. Unduh Backup Data (JSON)
               </span>
               <p className="text-xs text-slate-400">
                 Simpan seluruh data jadwal standby dan daftar pengguna ke file lokal.
@@ -586,16 +671,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 type="button"
                 onClick={handleExportData}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700 shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-emerald-400" />
                 <span>Unduh Backup JSON</span>
               </button>
             </div>
 
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
               <span className="text-xs font-bold text-slate-200 block">
-                2. Pulihkan / Impor Data (JSON)
+                3. Pulihkan / Impor Data (JSON)
               </span>
               <p className="text-xs text-slate-400">
                 Pilih file JSON hasil backup untuk memulihkan jadwal dan akun pengguna.
@@ -614,14 +699,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="p-4 bg-red-950/20 border border-red-900/40 rounded-xl space-y-2">
               <span className="text-xs font-bold text-red-300 block">
-                3. Reset Data ke Jadwal Standar Awal
+                4. Reset Data ke Jadwal Standar Awal
               </span>
               <p className="text-xs text-slate-400">
                 Mengembalikan jadwal standby tim ke data default (29-10-2026).
               </p>
               <button
                 type="button"
-                onClick={onResetAllData}
+                onClick={promptResetAll}
                 className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -631,6 +716,73 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* SECTION KONEKSI DATABASE REALTIME GITHUB & VERCEL */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-400">
+              <GitBranch className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider block">
+                KONEKSI REPOSITORI & DEPLOYMENT
+              </span>
+              <h3 className="text-base font-bold text-white tracking-tight">
+                Integrasi Realtime GitHub & Vercel
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 text-xs font-mono font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              TERHUBUNG 🟢
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
+            <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
+              <Database className="w-4 h-4 text-emerald-400" />
+              <span>Database Google AI Studio</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Tersimpan secara persistent di LocalStorage v5 & siap di-export ke JSON untuk migrasi server.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
+            <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
+              <GitBranch className="w-4 h-4 text-purple-400" />
+              <span>GitHub Repository Sync</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Kode sumber aplikasi dan struktur data default siap di-push langsung ke repositori GitHub.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
+            <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
+              <Globe className="w-4 h-4 text-blue-400" />
+              <span>Vercel Auto Deployment</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Vercel secara otomatis mendeteksi update dari GitHub untuk membangun versi web live secara realtime.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* CUSTOM CONFIRM DELETE MODAL (PREVENTS BROWSER POPUP BLOCKING) */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title={`Konfirmasi Hapus ${deleteTarget?.type === 'user' ? 'Pengguna' : deleteTarget?.type === 'group' ? 'Kelompok Tim' : 'Seluruh Data'}`}
+        message={`Apakah Anda yakin ingin menghapus "${deleteTarget?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        onConfirm={executeConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

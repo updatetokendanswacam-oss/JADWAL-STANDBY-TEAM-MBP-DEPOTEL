@@ -1,6 +1,6 @@
 {
-  "name": "Aplikasi Jadwal Standby MBP Depotel & Site Checklist",
-  "description": "Aplikasi Manajemen Jadwal Standby Team MBP Depotel Inner Jaktim dan Template Salin Daftar Site Telecom",
+  "name": "JADWAL STANDBY TEAM MBP DEPOTEL",
+  "description": "Aplikasi Operasional Jadwal Standby Team MBP Depotel Inner Jakarta Timur NOP Southern",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

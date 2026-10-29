@@ -39,50 +39,16 @@ export const Header: React.FC<HeaderProps> = ({
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
           <div>
-            <span className="text-base sm:text-lg font-extrabold tracking-tight text-white whitespace-nowrap">
-              DEPOTEL <span className="text-emerald-400">INNER JAKTIM</span>
+            <span className="text-xs sm:text-sm font-extrabold tracking-tight text-white whitespace-nowrap block uppercase">
+              JADWAL STANDBY TEAM
+            </span>
+            <span className="text-xs font-mono font-bold text-emerald-400 block -mt-1">
+              MBP DEPOTEL
             </span>
           </div>
         </a>
 
-        {/* Zone 2: Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-2 text-xs font-semibold">
-          <button
-            onClick={() => onSelectView('mbp_standby')}
-            className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 select-none ${
-              activeView === 'mbp_standby'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
-                : 'text-slate-300 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <Home className="w-4 h-4 text-emerald-400" />
-            <span>Beranda Standby MBP</span>
-          </button>
-
-          <button
-            onClick={() => onSelectView('broadcast_wa')}
-            className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 select-none ${
-              activeView === 'broadcast_wa'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
-                : 'text-slate-300 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <MessageCircle className="w-4 h-4 text-emerald-400" />
-            <span>Generator Broadcast WA</span>
-          </button>
-
-          <button
-            onClick={() => onSelectView('settings')}
-            className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 select-none ${
-              activeView === 'settings'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
-                : 'text-slate-300 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <Settings className="w-4 h-4 text-slate-400" />
-            <span>Pengaturan</span>
-          </button>
-        </nav>
+        {/* Top Header Actions (PWA Install, Reset, Quick Copy) */}
 
         {/* Zone 3: Quick Action & PWA Install Button */}
         <div className="flex items-center gap-2 shrink-0">
@@ -105,45 +71,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Salin Text WA</span>
           </button>
         </div>
-      </div>
-
-      {/* Mobile Navigation Bottom Bar (Touch-Optimized) */}
-      <div className="lg:hidden flex items-center justify-around bg-slate-900 border-t border-slate-800 px-2 py-1 text-[11px] font-semibold">
-        <button
-          onClick={() => onSelectView('mbp_standby')}
-          className={`min-h-[44px] px-3 py-2 rounded-xl whitespace-nowrap flex items-center gap-1.5 select-none ${
-            activeView === 'mbp_standby'
-              ? 'bg-emerald-600 text-white font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Home className="w-4 h-4" />
-          <span>Beranda</span>
-        </button>
-
-        <button
-          onClick={() => onSelectView('broadcast_wa')}
-          className={`min-h-[44px] px-3 py-2 rounded-xl whitespace-nowrap flex items-center gap-1.5 select-none ${
-            activeView === 'broadcast_wa'
-              ? 'bg-emerald-600 text-white font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <MessageCircle className="w-4 h-4" />
-          <span>Broadcast</span>
-        </button>
-
-        <button
-          onClick={() => onSelectView('settings')}
-          className={`min-h-[44px] px-3 py-2 rounded-xl whitespace-nowrap flex items-center gap-1.5 select-none ${
-            activeView === 'settings'
-              ? 'bg-emerald-600 text-white font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Settings className="w-4 h-4" />
-          <span>Pengaturan</span>
-        </button>
       </div>
     </header>
   );

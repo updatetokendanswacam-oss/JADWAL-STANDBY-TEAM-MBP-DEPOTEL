@@ -52,23 +52,26 @@ export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
   let lines: string[] = [];
 
   // Title line
-  lines.push(`${schedule.title}`);
-  lines.push('______________________\n');
+  lines.push(schedule.title);
+  lines.push('______________________');
+  lines.push('');
 
   // NOP Name
-  lines.push(`*${schedule.nopName}*\n`);
+  lines.push(`*${schedule.nopName}*`);
+  lines.push('');
 
   // Groups & Members
   schedule.groups.forEach((group) => {
-    lines.push(`${group.groupName} :\n`);
+    lines.push(`${group.groupName} :`);
     group.members.forEach((member, idx) => {
       const emoji = getStatusEmoji(member.status);
-      lines.push(`${idx + 1}. ${emoji}${member.name}☆${member.phone}`);
+      lines.push(`${idx + 1}. ${emoji} ${member.name} ☆ ${member.phone}`);
     });
     lines.push(''); // Empty line between groups
   });
 
-  lines.push('_______________________\n');
+  lines.push('_______________________');
+  lines.push('');
 
   // Keterangan / Legend
   lines.push('Keterangan :');

@@ -146,11 +146,37 @@ export default function App() {
     }
   };
 
+  const handleRefreshData = () => {
+    try {
+      const savedSchedule = localStorage.getItem(STORAGE_KEY_SCHEDULE);
+      if (savedSchedule) {
+        setSchedule(JSON.parse(savedSchedule));
+      }
+      const savedUsers = localStorage.getItem(STORAGE_KEY_USERS);
+      if (savedUsers) {
+        setUsers(JSON.parse(savedUsers));
+      }
+      window.dispatchEvent(new Event('storage'));
+    } catch (e) {
+      console.error('Failed to refresh data', e);
+    }
+  };
+
   const currentDateDisplay = schedule.date || '29-10-2026';
   const currentDayDisplay = schedule.dayName ? `${schedule.dayName.toUpperCase()}, ` : '';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 relative overflow-x-hidden">
+      {/* Background Watermark Logo */}
+      <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-[0.03] select-none overflow-hidden">
+        <div className="text-center space-y-4 transform -rotate-12 scale-125 sm:scale-150">
+          <ShieldCheck className="w-96 h-96 mx-auto text-emerald-400" />
+          <h1 className="text-6xl sm:text-8xl font-black font-mono tracking-tighter text-emerald-300 uppercase">
+            JADWAL STANDBY TEAM MBP DEPOTEL
+          </h1>
+        </div>
+      </div>
+
       {/* Toast Notification Banner */}
       {toastMessage && (
         <div className="fixed top-20 right-4 z-50 bg-emerald-600 text-white font-semibold text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-400/30 animate-bounce">
@@ -168,53 +194,7 @@ export default function App() {
       />
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        {/* Navigation Tabs Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-2 rounded-2xl border border-slate-800">
-          <div className="flex items-center gap-2 overflow-x-auto p-1">
-            <button
-              onClick={() => setActiveView('mbp_standby')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shrink-0 ${
-                activeView === 'mbp_standby'
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
-              }`}
-            >
-              <Home className="w-4 h-4 text-emerald-300" />
-              <span>Beranda Standby MBP ({currentDayDisplay}{currentDateDisplay})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView('broadcast_wa')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shrink-0 ${
-                activeView === 'broadcast_wa'
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
-              }`}
-            >
-              <MessageCircle className="w-4 h-4 text-emerald-300" />
-              <span>Generator Broadcast WA</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView('settings')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shrink-0 ${
-                activeView === 'settings'
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
-              }`}
-            >
-              <Settings className="w-4 h-4 text-slate-300" />
-              <span>Pengaturan & Kelola User</span>
-            </button>
-          </div>
-
-          <div className="text-xs text-slate-400 px-3 flex items-center gap-2 shrink-0">
-            <Zap className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-mono">{schedule.nopName || 'NOP SOUTHERN'} — INNER JAKTIM</span>
-          </div>
-        </div>
-
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-24 sm:pb-28">
         {/* View Switcher */}
         {activeView === 'mbp_standby' && (
           <MBPStandbyView
@@ -240,14 +220,72 @@ export default function App() {
             users={users}
             onUpdateUsers={setUsers}
             onResetAllData={handleResetData}
+            onRefreshData={handleRefreshData}
             onShowToast={showToast}
           />
         )}
       </main>
 
-      {/* FOOTER SECTION */}
-      <footer className="bg-slate-950 border-t border-slate-800 py-8 mt-16 text-slate-400 text-xs">
+      {/* FOOTER SECTION & STICKY BOTTOM NAVIGATION BAR */}
+      <footer className="bg-slate-950 border-t border-slate-800 py-8 text-slate-400 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+          {/* Main Footer Navigation Buttons */}
+          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <span className="font-extrabold text-slate-100 text-sm block">
+                  DEPOTEL INNER JAKTIM — MENU UTAMA
+                </span>
+                <span className="text-slate-400 text-xs font-mono">
+                  {schedule.nopName || 'NOP SOUTHERN'} ({currentDayDisplay}{currentDateDisplay})
+                </span>
+              </div>
+            </div>
+
+            {/* Footer Navigation Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto p-1 justify-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveView('mbp_standby')}
+                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer select-none ${
+                  activeView === 'mbp_standby'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 ring-2 ring-emerald-500/30'
+                    : 'bg-slate-950 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Home className="w-4 h-4 text-emerald-300 pointer-events-none" />
+                <span>Beranda Standby MBP</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveView('broadcast_wa')}
+                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer select-none ${
+                  activeView === 'broadcast_wa'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 ring-2 ring-emerald-500/30'
+                    : 'bg-slate-950 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-300 pointer-events-none" />
+                <span>Broadcast WA</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveView('settings')}
+                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer select-none ${
+                  activeView === 'settings'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 ring-2 ring-emerald-500/30'
+                    : 'bg-slate-950 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Settings className="w-4 h-4 text-slate-300 pointer-events-none" />
+                <span>Pengaturan</span>
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-slate-800">
             {/* Col 1: App Info */}
             <div className="space-y-2">
@@ -263,13 +301,13 @@ export default function App() {
             {/* Col 2: Navigation Links */}
             <div className="space-y-2">
               <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px] block">
-                Navigasi Cepat
+                Navigasi Cepat Footer
               </span>
               <ul className="space-y-1.5 text-slate-400 text-xs font-medium">
                 <li>
                   <button
                     onClick={() => setActiveView('mbp_standby')}
-                    className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                    className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <Home className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Beranda Standby MBP</span>
@@ -278,7 +316,7 @@ export default function App() {
                 <li>
                   <button
                     onClick={() => setActiveView('broadcast_wa')}
-                    className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                    className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Generator Broadcast WA</span>
@@ -287,7 +325,7 @@ export default function App() {
                 <li>
                   <button
                     onClick={() => setActiveView('settings')}
-                    className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                    className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <Settings className="w-3.5 h-3.5 text-slate-400" />
                     <span>Pengaturan & Kelola User</span>
@@ -329,6 +367,50 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* DOCKED FIXED BOTTOM NAVIGATION BAR FOR ALL DEVICES (DESKTOP & HP MOBILE) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-4 py-2 shadow-2xl flex items-center justify-center">
+        <div className="max-w-md w-full flex items-center justify-around gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveView('mbp_standby')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
+              activeView === 'mbp_standby'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/80 ring-2 ring-emerald-500/30 font-extrabold'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <Home className="w-4 h-4 pointer-events-none" />
+            <span>Beranda</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('broadcast_wa')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
+              activeView === 'broadcast_wa'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/80 ring-2 ring-emerald-500/30 font-extrabold'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <MessageCircle className="w-4 h-4 pointer-events-none" />
+            <span>Broadcast</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('settings')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
+              activeView === 'settings'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/80 ring-2 ring-emerald-500/30 font-extrabold'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <Settings className="w-4 h-4 pointer-events-none" />
+            <span>Pengaturan</span>
+          </button>
+        </div>
+      </div>
 
       {/* Personnel Add/Edit Modal */}
       <PersonnelModal

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StandbySchedule, MemberStatus, Personnel } from '../types';
 import { KeteranganLegend } from './KeteranganLegend';
 import { CalendarDatePickerModal } from './CalendarDatePickerModal';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import {
   formatStandbyScheduleToWA,
   getStatusEmoji,
@@ -39,6 +40,12 @@ interface MBPStandbyViewProps {
   onShowToast: (msg: string) => void;
 }
 
+interface PersonnelDeleteTarget {
+  groupId: string;
+  memberId: string;
+  memberName: string;
+}
+
 export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   schedule,
   onUpdateSchedule,
@@ -51,6 +58,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [deletePersonnelTarget, setDeletePersonnelTarget] = useState<PersonnelDeleteTarget | null>(null);
 
   // Calculate Personel Metrics
   const allMembers = schedule.groups.flatMap((g) => g.members);
@@ -73,7 +81,6 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     let newTitle = schedule.title;
 
     if (schedule.isCustomTitle) {
-      // Preserve custom user formatting permanently! Just swap date and day if present
       if (oldDateStr && newTitle.includes(oldDateStr)) {
         newTitle = newTitle.replace(oldDateStr, newDateDDMMYYYY);
       } else {
@@ -88,7 +95,6 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
         newTitle = newTitle.replace(regexDay, newDayName.toUpperCase());
       }
     } else {
-      // Standard title builder
       newTitle = buildScheduleTitleWithDay(newDateDDMMYYYY);
     }
 
@@ -102,7 +108,6 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     onShowToast(`Tanggal berhasil diupdate ke: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}`);
   };
 
-  // Function to insert line break (Enter) into Title and mark as PERMANENT CUSTOM TITLE
   const handleAddEnterToTitle = () => {
     onUpdateSchedule({
       ...schedule,
@@ -123,7 +128,6 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     onShowToast('Judul Laporan Format WA disimpan secara permanen!');
   };
 
-  // One-click status change handler
   const handleSingleClickStatusChange = (
     groupId: string,
     memberId: string,
@@ -160,9 +164,18 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     handleSingleClickStatusChange(groupId, memberId, cycleMap[currentStatus]);
   };
 
-  const handleDeleteMember = (groupId: string, memberId: string, memberName: string) => {
-    if (!window.confirm(`Hapus ${memberName} dari tim?`)) return;
+  const promptDeleteMember = (groupId: string, memberId: string, memberName: string) => {
+    setDeletePersonnelTarget({
+      groupId,
+      memberId,
+      memberName
+    });
+  };
 
+  const executeDeletePersonnel = () => {
+    if (!deletePersonnelTarget) return;
+
+    const { groupId, memberId, memberName } = deletePersonnelTarget;
     const updatedGroups = schedule.groups.map((group) => {
       if (group.id !== groupId) return group;
       return {
@@ -172,7 +185,8 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     });
 
     onUpdateSchedule({ ...schedule, groups: updatedGroups });
-    onShowToast(`${memberName} berhasil dihapus`);
+    onShowToast(`${memberName} berhasil dihapus dari tim.`);
+    setDeletePersonnelTarget(null);
   };
 
   const handleCopyWA = () => {
@@ -221,10 +235,10 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsCalendarModalOpen(true)}
-              className="min-h-[44px] px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2 font-bold text-xs shrink-0 select-none"
+              className="min-h-[44px] px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2 font-bold text-xs shrink-0 select-none cursor-pointer"
               title="Buka Kalender Manual"
             >
-              <CalendarIcon className="w-5 h-5" />
+              <CalendarIcon className="w-5 h-5 pointer-events-none" />
               <span>Buka Kalender</span>
             </button>
             <div>
@@ -241,9 +255,9 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
           <div className="flex items-center gap-2 self-start sm:self-center">
             <button
               onClick={() => setIsCalendarModalOpen(true)}
-              className="min-h-[44px] px-4 py-2 bg-slate-950 border border-emerald-500/80 hover:border-emerald-400 rounded-xl text-xs font-mono font-bold text-emerald-300 focus:outline-none flex items-center gap-2 shadow-sm transition-colors hover:bg-slate-900 select-none"
+              className="min-h-[44px] px-4 py-2 bg-slate-950 border border-emerald-500/80 hover:border-emerald-400 rounded-xl text-xs font-mono font-bold text-emerald-300 focus:outline-none flex items-center gap-2 shadow-sm transition-colors hover:bg-slate-900 select-none cursor-pointer"
             >
-              <Settings2 className="w-4 h-4 text-emerald-400" />
+              <Settings2 className="w-4 h-4 text-emerald-400 pointer-events-none" />
               <span>{currentDayName.toUpperCase()}, {currentDateStr}</span>
             </button>
           </div>
@@ -264,11 +278,12 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
 
             {/* ENTER / NEWLINE ICON BUTTON */}
             <button
+              type="button"
               onClick={handleAddEnterToTitle}
-              className="min-h-[36px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none"
+              className="min-h-[36px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none cursor-pointer"
               title="Tambah Baris Baru / Enter Ke Bawah"
             >
-              <CornerDownLeft className="w-3.5 h-3.5 text-emerald-400" />
+              <CornerDownLeft className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
               <span>+ Enter</span>
             </button>
           </div>
@@ -284,10 +299,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                 className="px-3 py-2 bg-slate-950 border border-emerald-500 rounded-lg text-xs font-mono text-emerald-300 flex-1 focus:outline-none resize-y min-h-[44px]"
               />
               <button
+                type="button"
                 onClick={() => handleSaveCustomTitle(schedule.title)}
-                className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shrink-0 flex items-center gap-1 shadow-md select-none"
+                className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shrink-0 flex items-center gap-1 shadow-md select-none cursor-pointer"
               >
-                <Save className="w-3.5 h-3.5" />
+                <Save className="w-3.5 h-3.5 pointer-events-none" />
                 <span>Simpan</span>
               </button>
             </div>
@@ -297,10 +313,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                 {schedule.title}
               </div>
               <button
+                type="button"
                 onClick={() => setIsEditingTitle(true)}
-                className="min-h-[40px] text-xs font-semibold text-emerald-400 hover:underline shrink-0 px-2 flex items-center select-none"
+                className="min-h-[40px] text-xs font-semibold text-emerald-400 hover:underline shrink-0 px-2 flex items-center select-none cursor-pointer"
               >
-                <Edit2 className="w-3.5 h-3.5 mr-1" />
+                <Edit2 className="w-3.5 h-3.5 mr-1 pointer-events-none" />
                 Edit Judul
               </button>
             </div>
@@ -376,10 +393,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                 JADWAL AKTIF
               </span>
               <button
+                type="button"
                 onClick={() => setIsCalendarModalOpen(true)}
-                className="text-xs text-slate-300 font-mono font-semibold flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-emerald-500/60 transition-colors select-none"
+                className="text-xs text-slate-300 font-mono font-semibold flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-emerald-500/60 transition-colors select-none cursor-pointer"
               >
-                <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
+                <CalendarIcon className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
                 {currentDayName.toUpperCase()}, {currentDateStr}
               </button>
             </div>
@@ -393,16 +411,18 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
+              type="button"
               onClick={handleCopyWA}
-              className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-sm rounded-xl transition-colors active:scale-95 select-none"
+              className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-sm rounded-xl transition-colors active:scale-95 select-none cursor-pointer"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-emerald-400" />}
               <span>{copied ? 'Tersalin!' : 'Salin Text'}</span>
             </button>
 
             <button
+              type="button"
               onClick={handleShareWA}
-              className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-emerald-950/50 active:scale-95 select-none"
+              className="min-h-[44px] flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-emerald-950/50 active:scale-95 select-none cursor-pointer"
             >
               <MessageCircle className="w-4 h-4" />
               <span>Kirim Laporan ke WhatsApp</span>
@@ -424,7 +444,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
             <select
               value={filterGroup}
               onChange={(e) => setFilterGroup(e.target.value)}
-              className="min-h-[40px] px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-semibold"
+              className="min-h-[40px] px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer"
             >
               <option value="all">Semua Tim (TO JAKTIM 1 & 2)</option>
               {schedule.groups.map((g) => (
@@ -440,20 +460,23 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
               Set Semua:
             </span>
             <button
+              type="button"
               onClick={() => handleBulkSetStatus('standby')}
-              className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/50 text-emerald-300 rounded-lg transition-colors whitespace-nowrap select-none"
+              className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/50 text-emerald-300 rounded-lg transition-colors whitespace-nowrap select-none cursor-pointer"
             >
               🟢 Standby
             </button>
             <button
+              type="button"
               onClick={() => handleBulkSetStatus('off')}
-              className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-red-950/80 hover:bg-red-900 border border-red-700/50 text-red-300 rounded-lg transition-colors whitespace-nowrap select-none"
+              className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-red-950/80 hover:bg-red-900 border border-red-700/50 text-red-300 rounded-lg transition-colors whitespace-nowrap select-none cursor-pointer"
             >
               🔴 Off
             </button>
             <button
+              type="button"
               onClick={() => handleBulkSetStatus('ijin_sakit')}
-              className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-amber-950/80 hover:bg-amber-900 border border-amber-700/50 text-amber-300 rounded-lg transition-colors whitespace-nowrap select-none"
+              className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-amber-950/80 hover:bg-amber-900 border border-amber-700/50 text-amber-300 rounded-lg transition-colors whitespace-nowrap select-none cursor-pointer"
             >
               🟡 Ijin/Sakit
             </button>
@@ -480,10 +503,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
               </div>
 
               <button
+                type="button"
                 onClick={() => onOpenAddMember(group.id)}
-                className="min-h-[36px] flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition-colors select-none"
+                className="min-h-[36px] flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition-colors select-none cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                <Plus className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
                 <span>Tambah Personel</span>
               </button>
             </div>
@@ -514,9 +538,10 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                         </span>
 
                         <button
+                          type="button"
                           onClick={() => handleCycleStatus(group.id, member.id, member.status)}
                           title="Klik untuk ganti status (STANDBY -> OFF -> IJIN)"
-                          className="text-2xl shrink-0 p-1.5 rounded-lg hover:bg-slate-800 transition-transform active:scale-110 select-none min-h-[44px] min-w-[44px] flex items-center justify-center"
+                          className="text-2xl shrink-0 p-1.5 rounded-lg hover:bg-slate-800 transition-transform active:scale-110 select-none min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
                         >
                           {statusEmoji}
                         </button>
@@ -543,7 +568,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                               title={`Chat WA dengan ${member.name}`}
                               className="px-2.5 py-1 bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-700/80 text-emerald-400 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors select-none min-h-[32px]"
                             >
-                              <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                              <MessageCircle className="w-3.5 h-3.5 text-emerald-400 pointer-events-none" />
                               <span>Chat WA</span>
                             </a>
                           </div>
@@ -565,11 +590,12 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                         </div>
                       </div>
 
-                      {/* 1-CLICK STATUS SWITCHER BUTTONS (MOBILE TOUCH OPTIMIZED) */}
+                      {/* 1-CLICK STATUS SWITCHER BUTTONS */}
                       <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
                         <button
+                          type="button"
                           onClick={() => handleSingleClickStatusChange(group.id, member.id, 'off')}
-                          className={`min-h-[44px] px-3 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border select-none ${
+                          className={`min-h-[44px] px-3 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border select-none cursor-pointer ${
                             member.status === 'off'
                               ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-950/50 ring-2 ring-red-500/30'
                               : 'bg-slate-950/80 hover:bg-red-950/50 text-slate-300 border-slate-700/80 hover:border-red-700/50'
@@ -580,10 +606,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                         </button>
 
                         <button
+                          type="button"
                           onClick={() =>
                             handleSingleClickStatusChange(group.id, member.id, 'ijin_sakit')
                           }
-                          className={`min-h-[44px] px-3 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border select-none ${
+                          className={`min-h-[44px] px-3 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border select-none cursor-pointer ${
                             member.status === 'ijin_sakit'
                               ? 'bg-amber-600 text-white border-amber-500 shadow-md shadow-amber-950/50 ring-2 ring-amber-500/30'
                               : 'bg-slate-950/80 hover:bg-amber-950/50 text-slate-300 border-slate-700/80 hover:border-amber-700/50'
@@ -594,10 +621,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
                         </button>
 
                         <button
+                          type="button"
                           onClick={() =>
                             handleSingleClickStatusChange(group.id, member.id, 'standby')
                           }
-                          className={`min-h-[44px] px-3 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border select-none ${
+                          className={`min-h-[44px] px-3 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border select-none cursor-pointer ${
                             member.status === 'standby'
                               ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-950/50 ring-2 ring-emerald-500/30'
                               : 'bg-slate-950/80 hover:bg-emerald-950/50 text-slate-300 border-slate-700/80 hover:border-emerald-700/50'
@@ -609,18 +637,20 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
 
                         <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-800">
                           <button
+                            type="button"
                             onClick={() => onEditMember(group.id, member)}
                             title="Edit Data Personel"
-                            className="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors select-none"
+                            className="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors select-none cursor-pointer"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4 pointer-events-none" />
                           </button>
                           <button
-                            onClick={() => handleDeleteMember(group.id, member.id, member.name)}
+                            type="button"
+                            onClick={() => promptDeleteMember(group.id, member.id, member.name)}
                             title="Hapus Personel"
-                            className="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors select-none"
+                            className="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors select-none cursor-pointer"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4 pointer-events-none" />
                           </button>
                         </div>
                       </div>
@@ -641,6 +671,15 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
         onClose={() => setIsCalendarModalOpen(false)}
         currentDateDDMMYYYY={currentDateStr}
         onSelectDate={handleDateChange}
+      />
+
+      {/* Custom Personnel Delete Confirm Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deletePersonnelTarget}
+        title="Hapus Personel"
+        message={`Apakah Anda yakin ingin menghapus personel "${deletePersonnelTarget?.memberName}"?`}
+        onConfirm={executeDeletePersonnel}
+        onCancel={() => setDeletePersonnelTarget(null)}
       />
     </div>
   );
