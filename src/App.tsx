@@ -22,16 +22,28 @@ import {
   Settings,
   ShieldCheck,
   MessageCircle,
-  Building2,
   Layers
 } from 'lucide-react';
+import {
+  db,
+  testFirestoreConnection,
+  handleFirestoreError,
+  OperationType
+} from './firebase';
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+  DocumentSnapshot,
+  FirestoreError
+} from 'firebase/firestore';
 
 const STORAGE_KEY_INNER = 'mbp_schedule_inner_jaktim_v7';
 const STORAGE_KEY_OUTER = 'mbp_schedule_outer_bekasi_v7';
 const STORAGE_KEY_USERS = 'mbp_app_users_v7';
 
 export default function App() {
-  const [innerSchedule, setInnerSchedule] = useState<StandbySchedule>(() => {
+  const [innerSchedule, setInnerScheduleState] = useState<StandbySchedule>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_INNER);
       return saved ? JSON.parse(saved) : INITIAL_SCHEDULE_INNER_JAKTIM;
@@ -40,7 +52,7 @@ export default function App() {
     }
   });
 
-  const [outerSchedule, setOuterSchedule] = useState<StandbySchedule>(() => {
+  const [outerSchedule, setOuterScheduleState] = useState<StandbySchedule>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_OUTER);
       return saved ? JSON.parse(saved) : INITIAL_SCHEDULE_OUTER_BEKASI;
@@ -49,7 +61,7 @@ export default function App() {
     }
   });
 
-  const [users, setUsers] = useState<AppUser[]>(() => {
+  const [users, setUsersState] = useState<AppUser[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USERS);
       return saved ? JSON.parse(saved) : INITIAL_APP_USERS;
@@ -68,30 +80,119 @@ export default function App() {
   const [modalGroupId, setModalGroupId] = useState<string>('grp-jaktim-1');
   const [editingMember, setEditingMember] = useState<Personnel | null>(null);
 
-  // Persistence Effects
+  // Firestore Real-Time Listener Synchronization
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(innerSchedule));
-    } catch (e) {
-      console.error('Failed to save inner schedule', e);
-    }
-  }, [innerSchedule]);
+    testFirestoreConnection();
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(outerSchedule));
-    } catch (e) {
-      console.error('Failed to save outer schedule', e);
-    }
-  }, [outerSchedule]);
+    // 1. Inner Jaktim Listener
+    const unsubscribeInner = onSnapshot(
+      doc(db, 'schedules', 'inner_jaktim'),
+      (docSnap: DocumentSnapshot) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as StandbySchedule;
+          setInnerScheduleState(data);
+          try {
+            localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(data));
+          } catch (e) {
+            console.error('Failed local storage cache', e);
+          }
+        } else {
+          // Seed initial data if document doesn't exist
+          setDoc(doc(db, 'schedules', 'inner_jaktim'), INITIAL_SCHEDULE_INNER_JAKTIM).catch(
+            (err: unknown) => handleFirestoreError(err, OperationType.WRITE, 'schedules/inner_jaktim')
+          );
+        }
+      },
+      (error: FirestoreError) => {
+        console.warn('Firestore inner schedule snapshot error:', error);
+      }
+    );
 
-  useEffect(() => {
+    // 2. Outer Bekasi Listener
+    const unsubscribeOuter = onSnapshot(
+      doc(db, 'schedules', 'outer_bekasi'),
+      (docSnap: DocumentSnapshot) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as StandbySchedule;
+          setOuterScheduleState(data);
+          try {
+            localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(data));
+          } catch (e) {
+            console.error('Failed local storage cache', e);
+          }
+        } else {
+          setDoc(doc(db, 'schedules', 'outer_bekasi'), INITIAL_SCHEDULE_OUTER_BEKASI).catch(
+            (err: unknown) => handleFirestoreError(err, OperationType.WRITE, 'schedules/outer_bekasi')
+          );
+        }
+      },
+      (error: FirestoreError) => {
+        console.warn('Firestore outer schedule snapshot error:', error);
+      }
+    );
+
+    // 3. App Users Listener
+    const unsubscribeUsers = onSnapshot(
+      doc(db, 'app_users', 'users_list'),
+      (docSnap: DocumentSnapshot) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (Array.isArray(data?.list)) {
+            setUsersState(data.list);
+            try {
+              localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(data.list));
+            } catch (e) {
+              console.error('Failed local storage cache', e);
+            }
+          }
+        } else {
+          setDoc(doc(db, 'app_users', 'users_list'), { list: INITIAL_APP_USERS }).catch((err: unknown) =>
+            handleFirestoreError(err, OperationType.WRITE, 'app_users/users_list')
+          );
+        }
+      },
+      (error: FirestoreError) => {
+        console.warn('Firestore users snapshot error:', error);
+      }
+    );
+
+    return () => {
+      unsubscribeInner();
+      unsubscribeOuter();
+      unsubscribeUsers();
+    };
+  }, []);
+
+  // Update Handlers with Firestore Persistence
+  const setInnerSchedule = (newSchedule: StandbySchedule) => {
+    setInnerScheduleState(newSchedule);
     try {
-      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
-    } catch (e) {
-      console.error('Failed to save users', e);
-    }
-  }, [users]);
+      localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(newSchedule));
+    } catch {}
+    setDoc(doc(db, 'schedules', 'inner_jaktim'), newSchedule).catch((err: unknown) =>
+      handleFirestoreError(err, OperationType.WRITE, 'schedules/inner_jaktim')
+    );
+  };
+
+  const setOuterSchedule = (newSchedule: StandbySchedule) => {
+    setOuterScheduleState(newSchedule);
+    try {
+      localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(newSchedule));
+    } catch {}
+    setDoc(doc(db, 'schedules', 'outer_bekasi'), newSchedule).catch((err: unknown) =>
+      handleFirestoreError(err, OperationType.WRITE, 'schedules/outer_bekasi')
+    );
+  };
+
+  const setUsers = (newUsers: AppUser[]) => {
+    setUsersState(newUsers);
+    try {
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(newUsers));
+    } catch {}
+    setDoc(doc(db, 'app_users', 'users_list'), { list: newUsers }).catch((err: unknown) =>
+      handleFirestoreError(err, OperationType.WRITE, 'app_users/users_list')
+    );
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -173,29 +274,12 @@ export default function App() {
       setInnerSchedule(INITIAL_SCHEDULE_INNER_JAKTIM);
       setOuterSchedule(INITIAL_SCHEDULE_OUTER_BEKASI);
       setUsers(INITIAL_APP_USERS);
-      localStorage.removeItem(STORAGE_KEY_INNER);
-      localStorage.removeItem(STORAGE_KEY_OUTER);
-      localStorage.removeItem(STORAGE_KEY_USERS);
-      showToast('Data berhasil direset ke jadwal awal!');
+      showToast('Data berhasil direset dan disinkronkan ke Cloud!');
     }
   };
 
   const handleRefreshData = () => {
-    try {
-      const savedInner = localStorage.getItem(STORAGE_KEY_INNER);
-      if (savedInner) setInnerSchedule(JSON.parse(savedInner));
-
-      const savedOuter = localStorage.getItem(STORAGE_KEY_OUTER);
-      if (savedOuter) setOuterSchedule(JSON.parse(savedOuter));
-
-      const savedUsers = localStorage.getItem(STORAGE_KEY_USERS);
-      if (savedUsers) setUsers(JSON.parse(savedUsers));
-
-      window.dispatchEvent(new Event('storage'));
-      showToast('Perubahan data berhasil diperbarui!');
-    } catch (e) {
-      console.error('Failed to refresh data', e);
-    }
+    showToast('Menghubungkan & menyinkronkan data real-time dengan Cloud...');
   };
 
   const activeTargetGroups = modalScheduleId === innerSchedule.id ? innerSchedule.groups : outerSchedule.groups;
@@ -205,7 +289,6 @@ export default function App() {
     if (activeBroadcastList === 'inner') return innerSchedule;
     if (activeBroadcastList === 'outer') return outerSchedule;
 
-    // Combined Schedule representation for Broadcast WA view
     return {
       id: 'combined-schedule',
       title: `${innerSchedule.title}\n\n==============================\n\n${outerSchedule.title}`,
@@ -464,7 +547,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>PWA Ready & Terhubung WhatsApp</span>
+              <span>PWA Cloud Real-Time Active</span>
             </div>
           </div>
         </div>

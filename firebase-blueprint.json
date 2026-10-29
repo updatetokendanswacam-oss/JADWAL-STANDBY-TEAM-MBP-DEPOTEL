@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "Personnel": {
+      "title": "Personnel",
+      "description": "Team member standby personnel item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID" },
+        "name": { "type": "string", "description": "Name of personnel" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "status": {
+          "type": "string",
+          "enum": ["standby", "off", "ijin/sakit"],
+          "description": "Status code: standby, off, ijin/sakit"
+        }
+      },
+      "required": ["id", "name", "phone", "status"]
+    },
+    "PersonnelGroup": {
+      "title": "PersonnelGroup",
+      "description": "Group section for standby personnel (e.g. TO BEKASI TIMUR)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "members": {
+          "type": "array",
+          "description": "List of personnel"
+        }
+      },
+      "required": ["id", "name", "members"]
+    },
+    "StandbySchedule": {
+      "title": "StandbySchedule",
+      "description": "Full standby schedule document for Inner Jaktim or Outer Bekasi",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "nopName": { "type": "string" },
+        "date": { "type": "string" },
+        "dayName": { "type": "string" },
+        "groups": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "nopName", "date", "dayName", "groups"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "Application user record for team access control",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "area": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "phone", "area", "status"]
+    }
+  },
+  "firestore": {
+    "/schedules/{scheduleId}": {
+      "schema": "StandbySchedule",
+      "description": "Collection storing standby schedules for inner_jaktim and outer_bekasi"
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "Collection storing user accounts"
+    }
+  }
+}
