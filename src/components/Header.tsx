@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
               JADWAL STANDBY TEAM MBP DEPOTEL
             </span>
             <span className="text-[11px] font-mono font-bold text-amber-400 block -mt-0.5 truncate">
-              INNER JAKTIM & OUTER BEKASI
+              (NOP SOUTHERN & NOP BEKASI)
             </span>
           </div>
         </a>
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onResetData}
             title="Reset Data Ke Standar Awal"
-            className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors select-none"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors select-none cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
           </button>

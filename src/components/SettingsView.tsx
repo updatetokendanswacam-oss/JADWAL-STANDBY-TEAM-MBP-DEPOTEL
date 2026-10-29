@@ -24,8 +24,10 @@ import {
 } from 'lucide-react';
 
 interface SettingsViewProps {
-  schedule: StandbySchedule;
-  onUpdateSchedule: (newSchedule: StandbySchedule) => void;
+  innerSchedule: StandbySchedule;
+  outerSchedule: StandbySchedule;
+  onUpdateInnerSchedule: (newSchedule: StandbySchedule) => void;
+  onUpdateOuterSchedule: (newSchedule: StandbySchedule) => void;
   users: AppUser[];
   onUpdateUsers: (newUsers: AppUser[]) => void;
   onResetAllData: () => void;
@@ -35,22 +37,31 @@ interface SettingsViewProps {
 
 interface DeleteTarget {
   type: 'user' | 'group' | 'reset_all';
+  targetSchedule?: 'inner' | 'outer';
   id?: string;
   name: string;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
-  schedule,
-  onUpdateSchedule,
+  innerSchedule,
+  outerSchedule,
+  onUpdateInnerSchedule,
+  onUpdateOuterSchedule,
   users,
   onUpdateUsers,
   onResetAllData,
   onRefreshData,
   onShowToast
 }) => {
-  const [nopName, setNopName] = useState(schedule.nopName);
+  // NOP OPERASIONAL STATE
+  const [targetScheduleKey, setTargetScheduleKey] = useState<'inner' | 'outer'>('inner');
+  const currentSelectedSchedule = targetScheduleKey === 'inner' ? innerSchedule : outerSchedule;
+  const currentUpdateScheduleFn = targetScheduleKey === 'inner' ? onUpdateInnerSchedule : onUpdateOuterSchedule;
+
+  const [nopName, setNopName] = useState(innerSchedule.nopName || 'NOP SOUTHERN');
   const [newGroupName, setNewGroupName] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleManualRefresh = () => {
@@ -79,14 +90,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // CUSTOM DELETE CONFIRMATION MODAL STATE
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
-  const handleSaveGeneral = (e: React.FormEvent) => {
+  // NOP OPERASIONAL HANDLERS
+  const handleSaveNop = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateSchedule({
-      ...schedule,
-      nopName
+    currentUpdateScheduleFn({
+      ...currentSelectedSchedule,
+      nopName: nopName.trim().toUpperCase()
     });
     setSavedSuccess(true);
-    onShowToast('Pengaturan NOP berhasil disimpan!');
+    onShowToast(`Pengaturan NOP ${nopName.trim().toUpperCase()} berhasil disimpan!`);
     setTimeout(() => setSavedSuccess(false), 2000);
   };
 
@@ -100,9 +112,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       members: []
     };
 
-    onUpdateSchedule({
-      ...schedule,
-      groups: [...schedule.groups, newGrp]
+    currentUpdateScheduleFn({
+      ...currentSelectedSchedule,
+      groups: [...currentSelectedSchedule.groups, newGrp]
     });
 
     setNewGroupName('');
@@ -194,12 +206,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const promptDeleteGroup = (groupId: string, groupName: string) => {
-    if (schedule.groups.length <= 1) {
+    if (currentSelectedSchedule.groups.length <= 1) {
       alert('Minimal harus ada 1 kelompok tim!');
       return;
     }
     setDeleteTarget({
       type: 'group',
+      targetSchedule: targetScheduleKey,
       id: groupId,
       name: groupName
     });
@@ -221,8 +234,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       onUpdateUsers(updated);
       onShowToast(`Akun ${deleteTarget.name} berhasil dihapus.`);
     } else if (deleteTarget.type === 'group' && deleteTarget.id) {
-      const updatedGroups = schedule.groups.filter((g) => g.id !== deleteTarget.id);
-      onUpdateSchedule({ ...schedule, groups: updatedGroups });
+      if (deleteTarget.targetSchedule === 'inner') {
+        const updatedGroups = innerSchedule.groups.filter((g) => g.id !== deleteTarget.id);
+        onUpdateInnerSchedule({ ...innerSchedule, groups: updatedGroups });
+      } else {
+        const updatedGroups = outerSchedule.groups.filter((g) => g.id !== deleteTarget.id);
+        onUpdateOuterSchedule({ ...outerSchedule, groups: updatedGroups });
+      }
       onShowToast(`Grup ${deleteTarget.name} berhasil dihapus.`);
     } else if (deleteTarget.type === 'reset_all') {
       onResetAllData();
@@ -233,7 +251,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleExportData = () => {
     const dataObj = {
-      schedule,
+      innerSchedule,
+      outerSchedule,
       users,
       exportedAt: new Date().toISOString()
     };
@@ -242,7 +261,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `backup_mbp_jaktim_${schedule.date || 'data'}.json`;
+    a.download = `backup_mbp_standby_${innerSchedule.date || 'data'}.json`;
     a.click();
     URL.revokeObjectURL(url);
     onShowToast('Data backup JSON berhasil diunduh!');
@@ -256,8 +275,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (parsed.schedule) {
-          onUpdateSchedule(parsed.schedule);
+        if (parsed.innerSchedule) {
+          onUpdateInnerSchedule(parsed.innerSchedule);
+        } else if (parsed.schedule) {
+          onUpdateInnerSchedule(parsed.schedule);
+        }
+        if (parsed.outerSchedule) {
+          onUpdateOuterSchedule(parsed.outerSchedule);
         }
         if (parsed.users && Array.isArray(parsed.users)) {
           onUpdateUsers(parsed.users);
@@ -543,60 +567,103 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Section 1: Identitas NOP & Kelompok Tim */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-5">
-          <h3 className="text-base font-bold text-white flex items-center gap-2 pb-3 border-b border-slate-800">
-            <Shield className="w-5 h-5 text-emerald-400" />
-            <span>Identitas NOP & Kelompok Tim</span>
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Shield className="w-5 h-5 text-emerald-400" />
+              <span>Identitas NOP & Kelompok Tim</span>
+            </h3>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-bold">
+              OPERASIONAL
+            </span>
+          </div>
 
-          <form onSubmit={handleSaveGeneral} className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                Nama NOP Operasional:
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={nopName}
-                  onChange={(e) => setNopName(e.target.value)}
-                  placeholder="misal: NOP SOUTHERN"
-                  className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-white uppercase focus:outline-none focus:border-emerald-500 font-mono"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  {savedSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                  <span>Simpan</span>
-                </button>
-              </div>
+          {/* Tab Selector between Inner Jaktim and Bekasi */}
+          <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                setTargetScheduleKey('inner');
+                setNopName(innerSchedule.nopName);
+              }}
+              className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer select-none ${
+                targetScheduleKey === 'inner'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              NOP SOUTHERN (JAKTIM)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTargetScheduleKey('outer');
+                setNopName(outerSchedule.nopName);
+              }}
+              className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer select-none ${
+                targetScheduleKey === 'outer'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              NOP BEKASI (BEKASI)
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveNop} className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300 block">
+              Nama NOP Operasional ({targetScheduleKey === 'inner' ? 'Inner Jaktim' : 'Bekasi'}):
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={nopName}
+                onChange={(e) => setNopName(e.target.value)}
+                placeholder={targetScheduleKey === 'inner' ? 'NOP SOUTHERN' : 'NOP BEKASI'}
+                className="flex-1 px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-bold text-white uppercase focus:outline-none focus:border-emerald-500 font-mono"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                {savedSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                <span>Simpan</span>
+              </button>
             </div>
           </form>
 
-          {/* Group Management */}
           <div className="space-y-3 pt-3 border-t border-slate-800">
-            <label className="text-xs font-semibold text-slate-300 block">
-              Daftar Kelompok Tim (TO Area):
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300 block">
+                Daftar Kelompok Tim ({targetScheduleKey === 'inner' ? 'Inner Jaktim' : 'Bekasi'}):
+              </label>
+              <span className="text-[11px] text-slate-400 font-mono font-bold">
+                {currentSelectedSchedule.groups.length} Kelompok
+              </span>
+            </div>
 
             <form onSubmit={handleAddGroup} className="flex items-center gap-2">
               <input
                 type="text"
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
-                placeholder="Nama Kelompok Baru (misal: TO JAKTIM 3)"
-                className="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white uppercase placeholder-slate-500 focus:outline-none font-mono"
+                placeholder={
+                  targetScheduleKey === 'inner'
+                    ? 'misal: TO JAKTIM 3'
+                    : 'misal: TO BEKASI UTARA'
+                }
+                className="flex-1 px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white uppercase placeholder-slate-500 focus:outline-none font-mono"
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Tambah Group</span>
+                <span>Tambah</span>
               </button>
             </form>
 
-            <div className="space-y-2 pt-2">
-              {schedule.groups.map((group) => (
+            <div className="space-y-2 pt-1 max-h-72 overflow-y-auto">
+              {currentSelectedSchedule.groups.map((group) => (
                 <div
                   key={group.id}
                   className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3"
@@ -606,7 +673,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="font-mono font-bold text-xs text-slate-200">
                       {group.groupName}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400 font-bold">
                       {group.members.length} Anggota
                     </span>
                   </div>
@@ -618,7 +685,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       e.stopPropagation();
                       promptDeleteGroup(group.id, group.groupName);
                     }}
-                    className="min-h-[38px] px-3 py-1.5 bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-200 hover:text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    className="min-h-[36px] px-3 py-1 bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-200 hover:text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-red-400 pointer-events-none" />
                     <span>Hapus</span>

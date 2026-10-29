@@ -2,7 +2,8 @@ import { StandbySchedule, AppUser } from '../types';
 
 export const INITIAL_SCHEDULE_INNER_JAKTIM: StandbySchedule = {
   id: 'mbp-inner-jaktim',
-  title: 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM KAMIS, 29-10-2026',
+  title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026',
+  headerTitle: 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM',
   nopName: 'NOP SOUTHERN',
   date: '29-10-2026',
   dayName: 'Kamis',
@@ -61,6 +62,7 @@ export const INITIAL_SCHEDULE_INNER_JAKTIM: StandbySchedule = {
 export const INITIAL_SCHEDULE_OUTER_BEKASI: StandbySchedule = {
   id: 'mbp-outer-bekasi',
   title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* BEKASI 28-10-2026',
+  headerTitle: 'JADWAL STANDBY TEAM MBP DEPOTEL BEKASI',
   nopName: 'NOP BEKASI',
   date: '28-10-2026',
   dayName: 'Rabu',
@@ -195,4 +197,3 @@ export const INITIAL_APP_USERS: AppUser[] = [
     createdAt: '2026-10-29'
   }
 ];
-

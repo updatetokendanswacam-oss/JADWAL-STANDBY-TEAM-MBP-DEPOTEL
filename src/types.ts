@@ -16,7 +16,8 @@ export interface TeamGroup {
 
 export interface StandbySchedule {
   id: string;
-  title: string; // e.g. "JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM KAMIS, 29-10-2026"
+  title: string; // e.g. "JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026"
+  headerTitle?: string; // e.g. "JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM"
   isCustomTitle?: boolean; // True when user manually edits title so date picker preserves custom title format
   nopName: string; // e.g. "NOP SOUTHERN"
   date: string; // "29-10-2026"

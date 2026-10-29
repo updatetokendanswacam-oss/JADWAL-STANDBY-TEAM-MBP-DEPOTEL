@@ -15,14 +15,16 @@ import { MBPStandbyView } from './components/MBPStandbyView';
 import { BroadcastWAView } from './components/BroadcastWAView';
 import { SettingsView } from './components/SettingsView';
 import { PersonnelModal } from './components/PersonnelModal';
-import { formatStandbyScheduleToWA } from './utils/whatsappFormatter';
+import {
+  formatStandbyScheduleToWA,
+  formatCombinedStandbyScheduleToWA
+} from './utils/whatsappFormatter';
 import {
   CheckCircle2,
   Home,
   Settings,
   ShieldCheck,
-  MessageCircle,
-  Layers
+  MessageCircle
 } from 'lucide-react';
 import {
   db,
@@ -38,15 +40,46 @@ import {
   FirestoreError
 } from 'firebase/firestore';
 
-const STORAGE_KEY_INNER = 'mbp_schedule_inner_jaktim_v7';
-const STORAGE_KEY_OUTER = 'mbp_schedule_outer_bekasi_v7';
-const STORAGE_KEY_USERS = 'mbp_app_users_v7';
+const STORAGE_KEY_INNER = 'mbp_schedule_inner_jaktim_v10';
+const STORAGE_KEY_OUTER = 'mbp_schedule_outer_bekasi_v10';
+const STORAGE_KEY_USERS = 'mbp_app_users_v10';
+
+// Ensure group names for Inner Jaktim align with user's specification (TO JAKTIM 1 & TO JAKTIM 2)
+const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
+  let nop = sched.nopName || 'NOP SOUTHERN';
+  if (nop.includes('&') || (nop.includes('SOUTHERN') && nop.includes('BEKASI'))) {
+    nop = 'NOP SOUTHERN';
+  }
+  const updatedGroups = sched.groups.map((grp) => {
+    if (grp.groupName === 'NOP SOUTHERN JAKTIM 1') {
+      return { ...grp, groupName: 'TO JAKTIM 1' };
+    }
+    if (grp.groupName === 'NOP SOUTHERN JAKTIM 2') {
+      return { ...grp, groupName: 'TO JAKTIM 2' };
+    }
+    return grp;
+  });
+  return {
+    ...sched,
+    headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM',
+    nopName: nop,
+    groups: updatedGroups
+  };
+};
+
+const normalizeOuterSchedule = (sched: StandbySchedule): StandbySchedule => {
+  return {
+    ...sched,
+    headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL BEKASI',
+    nopName: sched.nopName || 'NOP BEKASI'
+  };
+};
 
 export default function App() {
   const [innerSchedule, setInnerScheduleState] = useState<StandbySchedule>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_INNER);
-      return saved ? JSON.parse(saved) : INITIAL_SCHEDULE_INNER_JAKTIM;
+      return saved ? normalizeInnerSchedule(JSON.parse(saved)) : INITIAL_SCHEDULE_INNER_JAKTIM;
     } catch {
       return INITIAL_SCHEDULE_INNER_JAKTIM;
     }
@@ -55,7 +88,7 @@ export default function App() {
   const [outerSchedule, setOuterScheduleState] = useState<StandbySchedule>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_OUTER);
-      return saved ? JSON.parse(saved) : INITIAL_SCHEDULE_OUTER_BEKASI;
+      return saved ? normalizeOuterSchedule(JSON.parse(saved)) : INITIAL_SCHEDULE_OUTER_BEKASI;
     } catch {
       return INITIAL_SCHEDULE_OUTER_BEKASI;
     }
@@ -71,7 +104,6 @@ export default function App() {
   });
 
   const [activeView, setActiveView] = useState<ViewMode>('mbp_standby');
-  const [activeBroadcastList, setActiveBroadcastList] = useState<'inner' | 'outer' | 'combined'>('combined');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Personnel Modal state
@@ -90,9 +122,10 @@ export default function App() {
       (docSnap: DocumentSnapshot) => {
         if (docSnap.exists()) {
           const data = docSnap.data() as StandbySchedule;
-          setInnerScheduleState(data);
+          const normalized = normalizeInnerSchedule(data);
+          setInnerScheduleState(normalized);
           try {
-            localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(data));
+            localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(normalized));
           } catch (e) {
             console.error('Failed local storage cache', e);
           }
@@ -114,9 +147,10 @@ export default function App() {
       (docSnap: DocumentSnapshot) => {
         if (docSnap.exists()) {
           const data = docSnap.data() as StandbySchedule;
-          setOuterScheduleState(data);
+          const normalized = normalizeOuterSchedule(data);
+          setOuterScheduleState(normalized);
           try {
-            localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(data));
+            localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(normalized));
           } catch (e) {
             console.error('Failed local storage cache', e);
           }
@@ -257,24 +291,21 @@ export default function App() {
   };
 
   const handleQuickCopyAll = () => {
-    const textInner = formatStandbyScheduleToWA(innerSchedule);
-    const textOuter = formatStandbyScheduleToWA(outerSchedule);
-    const combinedText = `${textInner}\n\n==========================================\n\n${textOuter}`;
-
-    navigator.clipboard.writeText(combinedText);
-    showToast('Seluruh Jadwal Standby (INNER JAKTIM & OUTER BEKASI) disalin ke Clipboard!');
+    const textCombined = formatCombinedStandbyScheduleToWA(innerSchedule, outerSchedule);
+    navigator.clipboard.writeText(textCombined);
+    showToast('Seluruh Jadwal Standby (Inner Jaktim & Bekasi) berhasil disalin!');
   };
 
   const handleResetData = () => {
     if (
       window.confirm(
-        'Apakah Anda yakin ingin mengembalikan data ke jadwal awal standar (INNER JAKTIM & OUTER BEKASI)?'
+        'Apakah Anda yakin ingin mengembalikan seluruh data ke format standar jadwal (INNER JAKTIM & BEKASI)?'
       )
     ) {
       setInnerSchedule(INITIAL_SCHEDULE_INNER_JAKTIM);
       setOuterSchedule(INITIAL_SCHEDULE_OUTER_BEKASI);
       setUsers(INITIAL_APP_USERS);
-      showToast('Data berhasil direset dan disinkronkan ke Cloud!');
+      showToast('Data berhasil direset ke standar awal dan disinkronkan ke Cloud!');
     }
   };
 
@@ -283,21 +314,6 @@ export default function App() {
   };
 
   const activeTargetGroups = modalScheduleId === innerSchedule.id ? innerSchedule.groups : outerSchedule.groups;
-
-  // Active Broadcast Schedule Object
-  const getActiveBroadcastSchedule = (): StandbySchedule => {
-    if (activeBroadcastList === 'inner') return innerSchedule;
-    if (activeBroadcastList === 'outer') return outerSchedule;
-
-    return {
-      id: 'combined-schedule',
-      title: `${innerSchedule.title}\n\n==============================\n\n${outerSchedule.title}`,
-      nopName: 'INNER JAKTIM & OUTER BEKASI',
-      date: innerSchedule.date,
-      dayName: innerSchedule.dayName,
-      groups: [...innerSchedule.groups, ...outerSchedule.groups]
-    };
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 relative overflow-x-hidden">
@@ -328,7 +344,7 @@ export default function App() {
 
       {/* Main View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-28 sm:pb-32">
-        {/* VIEW 1: MAIN DASHBOARD STANDBY (CONTAINS 2 STACKED LISTS: ATAS & BAWAH) */}
+        {/* VIEW 1: MAIN DASHBOARD STANDBY (DISPLAYS BOTH LISTS: INNER JAKTIM & BEKASI) */}
         {activeView === 'mbp_standby' && (
           <MBPStandbyView
             innerSchedule={innerSchedule}
@@ -343,63 +359,20 @@ export default function App() {
 
         {/* VIEW 2: BROADCAST WA GENERATOR */}
         {activeView === 'broadcast_wa' && (
-          <div className="space-y-4">
-            {/* List Selector for Broadcast WA */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-amber-400" />
-                <span>PILIH TAMPILAN TEXT BROADCAST WA:</span>
-              </span>
-
-              <div className="grid grid-cols-3 gap-2 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setActiveBroadcastList('combined')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
-                    activeBroadcastList === 'combined'
-                      ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
-                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
-                  }`}
-                >
-                  GABUNGAN 📜
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveBroadcastList('inner')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
-                    activeBroadcastList === 'inner'
-                      ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
-                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
-                  }`}
-                >
-                  JAKTIM 🏢
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveBroadcastList('outer')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
-                    activeBroadcastList === 'outer'
-                      ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
-                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
-                  }`}
-                >
-                  BEKASI 🏬
-                </button>
-              </div>
-            </div>
-
-            <BroadcastWAView
-              schedule={getActiveBroadcastSchedule()}
-              onShowToast={showToast}
-            />
-          </div>
+          <BroadcastWAView
+            innerSchedule={innerSchedule}
+            outerSchedule={outerSchedule}
+            onShowToast={showToast}
+          />
         )}
 
         {/* VIEW 3: SETTINGS & USER MANAGEMENT */}
         {activeView === 'settings' && (
           <SettingsView
-            schedule={innerSchedule}
-            onUpdateSchedule={setInnerSchedule}
+            innerSchedule={innerSchedule}
+            outerSchedule={outerSchedule}
+            onUpdateInnerSchedule={setInnerSchedule}
+            onUpdateOuterSchedule={setOuterSchedule}
             users={users}
             onUpdateUsers={setUsers}
             onResetAllData={handleResetData}
@@ -423,7 +396,7 @@ export default function App() {
                   JADWAL STANDBY TEAM MBP DEPOTEL
                 </span>
                 <span className="text-amber-400 text-xs font-mono font-bold">
-                  INNER JAKTIM & OUTER BEKASI
+                  (NOP SOUTHERN & NOP BEKASI)
                 </span>
               </div>
             </div>
@@ -476,17 +449,17 @@ export default function App() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-slate-100 font-extrabold text-sm">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <span>DEPOTEL INNER JAKTIM & OUTER BEKASI</span>
+                <span>DEPOTEL INNER JAKTIM & BEKASI</span>
               </div>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Aplikasi Operasional PWA Jadwal Standby Team MBP Depotel Inner Jakarta Timur (NOP Southern) & Outer Bekasi (NOP Bekasi).
+                Aplikasi Operasional PWA Jadwal Standby Team MBP Depotel Inner Jakarta Timur (NOP Southern) & Depotel Bekasi (NOP Bekasi).
               </p>
             </div>
 
             {/* Col 2: Navigation Links */}
             <div className="space-y-2">
               <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px] block">
-                Navigasi Cepat Footer
+                Navigasi Cepat
               </span>
               <ul className="space-y-1.5 text-slate-400 text-xs font-medium">
                 <li>
@@ -495,7 +468,7 @@ export default function App() {
                     className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <Home className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Beranda Standby MBP (2 List)</span>
+                    <span>Beranda Standby (Semua List)</span>
                   </button>
                 </li>
                 <li>
@@ -504,7 +477,7 @@ export default function App() {
                     className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Generator Broadcast WA</span>
+                    <span>Generator Format Broadcast WA</span>
                   </button>
                 </li>
                 <li>
@@ -543,7 +516,7 @@ export default function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 text-[11px] font-mono">
             <div>
-              © 2026 JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM & OUTER BEKASI.
+              © 2026 JADWAL STANDBY TEAM MBP DEPOTEL (NOP SOUTHERN & NOP BEKASI).
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -553,7 +526,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* DOCKED FIXED BOTTOM NAVIGATION BAR FOR ALL DEVICES (DESKTOP & HP MOBILE) */}
+      {/* DOCKED FIXED BOTTOM NAVIGATION BAR */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-4 py-2 shadow-2xl flex items-center justify-center">
         <div className="max-w-md w-full flex items-center justify-around gap-2">
           <button

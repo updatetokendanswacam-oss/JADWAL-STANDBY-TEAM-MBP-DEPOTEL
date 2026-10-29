@@ -43,18 +43,17 @@ export function getPersonelWALink(phone: string, name: string, status: MemberSta
   const waPhone = formatPhoneToWA(phone);
   const statusTxt = getStatusLabel(status);
   const emoji = getStatusEmoji(status);
-  const msg = `Halo Sdr. ${name},\nKonfirmasi Jadwal Standby MBP Depotel Inner Jaktim tanggal ${dateStr}.\nStatus Anda saat ini: ${emoji} ${statusTxt.toUpperCase()}.\nTerima kasih.`;
+  const msg = `Halo Sdr. ${name},\nKonfirmasi Jadwal Standby MBP Depotel tanggal ${dateStr}.\nStatus Anda saat ini: ${emoji} ${statusTxt.toUpperCase()}.\nTerima kasih.`;
   return `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
 }
 
 // Generate full schedule report text for WhatsApp broadcast
 export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
-  let lines: string[] = [];
+  const lines: string[] = [];
 
   // Title line
   lines.push(schedule.title);
-  lines.push('');
-  lines.push('__________________________________________');
+  lines.push('______________________');
   lines.push('');
 
   // NOP Name
@@ -72,7 +71,7 @@ export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
     lines.push(''); // Empty line between groups
   });
 
-  lines.push('______________________________________');
+  lines.push('_______________________');
   lines.push('');
 
   // Keterangan / Legend
@@ -84,3 +83,10 @@ export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
   return lines.join('\n');
 }
 
+// Combined report for both schedules (DEPOTEL INNER JAKTIM & DEPOTEL BEKASI)
+export function formatCombinedStandbyScheduleToWA(
+  innerSchedule: StandbySchedule,
+  outerSchedule: StandbySchedule
+): string {
+  return `${formatStandbyScheduleToWA(innerSchedule)}\n\n\n${formatStandbyScheduleToWA(outerSchedule)}`;
+}

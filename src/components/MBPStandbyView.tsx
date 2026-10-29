@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StandbySchedule, MemberStatus, Personnel } from '../types';
 import { KeteranganLegend } from './KeteranganLegend';
 import { CalendarDatePickerModal } from './CalendarDatePickerModal';
@@ -11,14 +11,10 @@ import {
 } from '../utils/whatsappFormatter';
 import {
   formatIndonesianDateFull,
-  getIndonesianDayName,
-  buildScheduleTitleWithDay
+  getIndonesianDayName
 } from '../utils/dateUtils';
 import {
   Users,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
   Copy,
   Check,
   Plus,
@@ -32,8 +28,9 @@ import {
   CheckCheck,
   Clock,
   Building2,
-  MapPin,
-  RefreshCw
+  Layers,
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 interface MBPStandbyViewProps {
@@ -63,19 +60,17 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   onShowToast
 }) => {
   const clock = useRealtimeClock();
+  const [activeTab, setActiveTab] = useState<'all' | 'inner' | 'outer'>('all');
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
-  const [targetScheduleForCalendar, setTargetScheduleForCalendar] = useState<'both' | 'inner' | 'outer'>('both');
   const [deletePersonnelTarget, setDeletePersonnelTarget] = useState<PersonnelDeleteTarget | null>(null);
 
-  // Apply real-time date change across schedules
-  const handleDateChange = (newDateDDMMYYYY: string, overrideTarget?: 'both' | 'inner' | 'outer') => {
-    const target = overrideTarget || targetScheduleForCalendar;
+  // Apply real-time date change across BOTH schedules automatically
+  const handleDateChange = (newDateDDMMYYYY: string) => {
     const newDayName = getIndonesianDayName(newDateDDMMYYYY);
 
-    const updateScheduleWithDate = (sched: StandbySchedule) => {
+    const updateScheduleWithDate = (sched: StandbySchedule, defaultAreaName: string) => {
       let newTitle = sched.title || '';
       const oldDate = sched.date;
-      const oldDay = sched.dayName;
 
       // 1. Replace date in title
       const datePattern = /\d{1,2}-\d{1,2}-\d{4}/;
@@ -83,24 +78,8 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
         newTitle = newTitle.replace(oldDate, newDateDDMMYYYY);
       } else if (datePattern.test(newTitle)) {
         newTitle = newTitle.replace(datePattern, newDateDDMMYYYY);
-      }
-
-      // 2. Replace day name in title if present
-      const dayNamePattern = /(SENIN|SELASA|RABU|KAMIS|JUMAT|JUM'AT|SABTU|MINGGU)/gi;
-      if (oldDay && newTitle.toLowerCase().includes(oldDay.toLowerCase())) {
-        const regexDay = new RegExp(oldDay, 'gi');
-        newTitle = newTitle.replace(regexDay, newDayName.toUpperCase());
-      } else if (dayNamePattern.test(newTitle)) {
-        newTitle = newTitle.replace(dayNamePattern, newDayName.toUpperCase());
-      }
-
-      // 3. Fallback if title didn't contain date
-      if (!newTitle.includes(newDateDDMMYYYY)) {
-        if (sched.id === 'mbp-outer-bekasi' || sched.nopName === 'NOP BEKASI') {
-          newTitle = `JADWAL STANDBY TEAM MBP *DEPOTEL* BEKASI ${newDateDDMMYYYY}`;
-        } else {
-          newTitle = `JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}`;
-        }
+      } else {
+        newTitle = `JADWAL STANDBY TEAM MBP *DEPOTEL* ${defaultAreaName} ${newDateDDMMYYYY}`;
       }
 
       return {
@@ -111,27 +90,23 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
       };
     };
 
-    if (target === 'both' || target === 'inner') {
-      onUpdateInnerSchedule(updateScheduleWithDate(innerSchedule));
-    }
-    if (target === 'both' || target === 'outer') {
-      onUpdateOuterSchedule(updateScheduleWithDate(outerSchedule));
-    }
+    onUpdateInnerSchedule(updateScheduleWithDate(innerSchedule, 'INNER JAKTIM'));
+    onUpdateOuterSchedule(updateScheduleWithDate(outerSchedule, 'BEKASI'));
 
-    onShowToast(`Tanggal berhasil diperbarui ke: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}`);
+    onShowToast(`Tanggal semua list berhasil diperbarui ke: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}`);
   };
 
   const handleSetTodayRealtime = () => {
-    setTargetScheduleForCalendar('both');
-    handleDateChange(clock.dateStrDDMMYYYY, 'both');
+    handleDateChange(clock.dateStrDDMMYYYY);
   };
 
   const executeDeletePersonnel = () => {
     if (!deletePersonnelTarget) return;
 
     const { scheduleId, groupId, memberId, memberName } = deletePersonnelTarget;
-    const targetSched = scheduleId === innerSchedule.id ? innerSchedule : outerSchedule;
-    const updateFn = scheduleId === innerSchedule.id ? onUpdateInnerSchedule : onUpdateOuterSchedule;
+    const isInner = scheduleId === innerSchedule.id;
+    const targetSched = isInner ? innerSchedule : outerSchedule;
+    const updateFn = isInner ? onUpdateInnerSchedule : onUpdateOuterSchedule;
 
     const updatedGroups = targetSched.groups.map((group) => {
       if (group.id !== groupId) return group;
@@ -178,7 +153,6 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTargetScheduleForCalendar('both');
                 setIsCalendarModalOpen(true);
               }}
               className="min-h-[42px] px-3.5 py-2 bg-slate-950 border border-emerald-500/80 hover:border-emerald-400 text-emerald-300 font-mono font-bold text-xs rounded-xl transition-colors hover:bg-slate-900 flex items-center gap-2 cursor-pointer select-none"
@@ -188,43 +162,93 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
             </button>
           </div>
         </div>
+
+        {/* LIST SWITCHER / FILTER TABS */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+            <Layers className="w-4 h-4 text-emerald-400" />
+            <span>TAMPILKAN LIST DI BERANDA:</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
+                activeTab === 'all'
+                  ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
+                  : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              SEMUA LIST (2)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('inner')}
+              className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
+                activeTab === 'inner'
+                  ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
+                  : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              INNER JAKTIM
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('outer')}
+              className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
+                activeTab === 'outer'
+                  ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
+                  : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              BEKASI
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* LIST 1 (ATAS): JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM */}
-      <SingleScheduleSection
-        schedule={innerSchedule}
-        listTitleLabel="LIST 1 (ATAS) — INNER JAKTIM"
-        badgeBg="bg-amber-500/10 border-amber-500/30 text-amber-400"
-        onUpdateSchedule={onUpdateInnerSchedule}
-        onOpenAddMember={(groupId) => onOpenAddMember(innerSchedule.id, groupId)}
-        onEditMember={(groupId, member) => onEditMember(innerSchedule.id, groupId, member)}
-        onPromptDelete={(groupId, memberId, memberName) =>
-          setDeletePersonnelTarget({ scheduleId: innerSchedule.id, groupId, memberId, memberName })
-        }
-        onOpenCalendarModal={() => {
-          setTargetScheduleForCalendar('inner');
-          setIsCalendarModalOpen(true);
-        }}
-        onShowToast={onShowToast}
-      />
+      {/* ======================================================== */}
+      {/* 1. JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM */}
+      {/* ======================================================== */}
+      {(activeTab === 'all' || activeTab === 'inner') && (
+        <SingleScheduleSection
+          schedule={innerSchedule}
+          listTitleLabel="DEPOTEL INNER JAKTIM"
+          headingTitle={innerSchedule.headerTitle || "JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM"}
+          badgeBg="bg-amber-500/10 border-amber-500/30 text-amber-400"
+          onUpdateSchedule={onUpdateInnerSchedule}
+          onOpenAddMember={(groupId) => onOpenAddMember(innerSchedule.id, groupId)}
+          onEditMember={(groupId, member) => onEditMember(innerSchedule.id, groupId, member)}
+          onPromptDelete={(groupId, memberId, memberName) =>
+            setDeletePersonnelTarget({ scheduleId: innerSchedule.id, groupId, memberId, memberName })
+          }
+          onOpenCalendarModal={() => setIsCalendarModalOpen(true)}
+          onShowToast={onShowToast}
+        />
+      )}
 
-      {/* LIST 2 (BAWAH): JADWAL STANDBY TEAM MBP DEPOTEL OUTER BEKASI */}
-      <SingleScheduleSection
-        schedule={outerSchedule}
-        listTitleLabel="LIST 2 (BAWAH) — OUTER BEKASI"
-        badgeBg="bg-teal-500/10 border-teal-500/30 text-teal-400"
-        onUpdateSchedule={onUpdateOuterSchedule}
-        onOpenAddMember={(groupId) => onOpenAddMember(outerSchedule.id, groupId)}
-        onEditMember={(groupId, member) => onEditMember(outerSchedule.id, groupId, member)}
-        onPromptDelete={(groupId, memberId, memberName) =>
-          setDeletePersonnelTarget({ scheduleId: outerSchedule.id, groupId, memberId, memberName })
-        }
-        onOpenCalendarModal={() => {
-          setTargetScheduleForCalendar('outer');
-          setIsCalendarModalOpen(true);
-        }}
-        onShowToast={onShowToast}
-      />
+      {/* ======================================================== */}
+      {/* 2. JADWAL STANDBY TEAM MBP DEPOTEL BEKASI */}
+      {/* ======================================================== */}
+      {(activeTab === 'all' || activeTab === 'outer') && (
+        <SingleScheduleSection
+          schedule={outerSchedule}
+          listTitleLabel="DEPOTEL BEKASI"
+          headingTitle={outerSchedule.headerTitle || "JADWAL STANDBY TEAM MBP DEPOTEL BEKASI"}
+          badgeBg="bg-blue-500/10 border-blue-500/30 text-blue-400"
+          onUpdateSchedule={onUpdateOuterSchedule}
+          onOpenAddMember={(groupId) => onOpenAddMember(outerSchedule.id, groupId)}
+          onEditMember={(groupId, member) => onEditMember(outerSchedule.id, groupId, member)}
+          onPromptDelete={(groupId, memberId, memberName) =>
+            setDeletePersonnelTarget({ scheduleId: outerSchedule.id, groupId, memberId, memberName })
+          }
+          onOpenCalendarModal={() => setIsCalendarModalOpen(true)}
+          onShowToast={onShowToast}
+        />
+      )}
 
       <KeteranganLegend />
 
@@ -248,10 +272,11 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   );
 };
 
-/* COMPONENT UNTUK MASING-MASING LIST (INNER JAKTIM / OUTER BEKASI) */
+/* COMPONENT UNTUK MASING-MASING LIST (INNER JAKTIM / BEKASI) */
 interface SingleScheduleSectionProps {
   schedule: StandbySchedule;
   listTitleLabel: string;
+  headingTitle: string;
   badgeBg: string;
   onUpdateSchedule: (newSchedule: StandbySchedule) => void;
   onOpenAddMember: (groupId: string) => void;
@@ -264,6 +289,7 @@ interface SingleScheduleSectionProps {
 const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   schedule,
   listTitleLabel,
+  headingTitle,
   badgeBg,
   onUpdateSchedule,
   onOpenAddMember,
@@ -276,6 +302,61 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   const [filterGroup, setFilterGroup] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const currentHeading = schedule.headerTitle || headingTitle;
+  const [isEditingHeading, setIsEditingHeading] = useState(false);
+  const [tempHeading, setTempHeading] = useState(currentHeading);
+
+  useEffect(() => {
+    setTempHeading(schedule.headerTitle || headingTitle);
+  }, [schedule.headerTitle, headingTitle]);
+
+  const handleSaveHeading = () => {
+    if (!tempHeading.trim()) return;
+    const newHeading = tempHeading.trim();
+    onUpdateSchedule({
+      ...schedule,
+      headerTitle: newHeading
+    });
+    setIsEditingHeading(false);
+    onShowToast(`Judul list berhasil disimpan: "${newHeading}"`);
+  };
+
+  // State for editing NOP name (e.g. Semua Kelompok NOP)
+  const [isEditingNop, setIsEditingNop] = useState(false);
+  const [tempNopName, setTempNopName] = useState(schedule.nopName);
+
+  // State for editing group name
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [tempGroupName, setTempGroupName] = useState('');
+
+  useEffect(() => {
+    setTempNopName(schedule.nopName);
+  }, [schedule.nopName]);
+
+  const handleSaveNopName = () => {
+    if (!tempNopName.trim()) return;
+    const newNop = tempNopName.trim().toUpperCase();
+    onUpdateSchedule({
+      ...schedule,
+      nopName: newNop
+    });
+    setIsEditingNop(false);
+    onShowToast(`Nama NOP berhasil disimpan: "${newNop}"`);
+  };
+
+  const handleSaveGroupName = () => {
+    if (!editingGroupId || !tempGroupName.trim()) return;
+    const newName = tempGroupName.trim().toUpperCase();
+    const updatedGroups = schedule.groups.map((g) =>
+      g.id === editingGroupId ? { ...g, groupName: newName } : g
+    );
+    onUpdateSchedule({
+      ...schedule,
+      groups: updatedGroups
+    });
+    setEditingGroupId(null);
+    onShowToast(`Nama kelompok berhasil diubah menjadi: "${newName}"`);
+  };
 
   const allMembers = schedule.groups.flatMap((g) => g.members);
   const totalPersonel = allMembers.length;
@@ -285,7 +366,6 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
 
   const currentDateStr = schedule.date || '29-10-2026';
   const currentDayName = schedule.dayName || getIndonesianDayName(currentDateStr);
-  const fullIndonesianDate = formatIndonesianDateFull(currentDateStr);
 
   const handleAddEnterToTitle = () => {
     onUpdateSchedule({
@@ -398,15 +478,78 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
               >
                 {listTitleLabel}
               </span>
-              <span className="text-xs text-slate-400 font-mono font-bold">
-                ({schedule.nopName})
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setTempNopName(schedule.nopName);
+                  setIsEditingNop(true);
+                }}
+                title="Klik untuk ubah nama NOP ini"
+                className="text-xs text-amber-400 font-mono font-bold hover:underline flex items-center gap-1 cursor-pointer group"
+              >
+                <span>({schedule.nopName})</span>
+                <Edit2 className="w-3 h-3 opacity-70 group-hover:opacity-100" />
+              </button>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              {schedule.nopName === 'NOP SOUTHERN'
-                ? 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM'
-                : 'JADWAL STANDBY TEAM MBP DEPOTEL OUTER BEKASI'}
-            </h2>
+            {isEditingHeading ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">
+                <input
+                  type="text"
+                  value={tempHeading}
+                  onChange={(e) => setTempHeading(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveHeading();
+                    } else if (e.key === 'Escape') {
+                      setIsEditingHeading(false);
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Masukkan judul list..."
+                  className="px-3.5 py-2 bg-slate-950 border-2 border-emerald-500 rounded-xl text-sm sm:text-base font-black text-white placeholder-slate-500 focus:outline-none shadow-inner min-w-[280px]"
+                />
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleSaveHeading}
+                    className="min-h-[38px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Simpan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempHeading(currentHeading);
+                      setIsEditingHeading(false);
+                    }}
+                    className="min-h-[38px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Batal</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  {currentHeading}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempHeading(currentHeading);
+                    setIsEditingHeading(true);
+                  }}
+                  title="Ubah Judul List Ini"
+                  className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-800/90 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5 group select-none"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white transition-colors" />
+                  <span className="text-[11px] font-bold text-slate-300 group-hover:text-white">Edit Judul</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -508,7 +651,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
             className="min-h-[40px] px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer select-none"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-emerald-400" />}
-            <span>{copied ? 'Tersalin!' : 'Salin Text List Ini'}</span>
+            <span>{copied ? 'Tersalin!' : `Salin ${schedule.nopName}`}</span>
           </button>
 
           <button
@@ -527,24 +670,55 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="text"
-            placeholder={`Cari di ${schedule.nopName}...`}
+            placeholder={`Cari personel di ${schedule.nopName}...`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="min-h-[40px] px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-full sm:w-56 font-medium"
           />
 
-          <select
-            value={filterGroup}
-            onChange={(e) => setFilterGroup(e.target.value)}
-            className="min-h-[40px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer"
-          >
-            <option value="all">Semua Kelompok ({schedule.nopName})</option>
-            {schedule.groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.groupName}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={filterGroup}
+              onChange={(e) => setFilterGroup(e.target.value)}
+              className="min-h-[40px] px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-semibold cursor-pointer max-w-[280px] truncate"
+            >
+              <option value="all">Semua Kelompok ({schedule.nopName})</option>
+              {schedule.groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.groupName}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (filterGroup === 'all') {
+                  setTempNopName(schedule.nopName);
+                  setIsEditingNop(!isEditingNop);
+                  setEditingGroupId(null);
+                } else {
+                  const targetGroup = schedule.groups.find((g) => g.id === filterGroup);
+                  if (targetGroup) {
+                    setEditingGroupId(targetGroup.id);
+                    setTempGroupName(targetGroup.groupName);
+                    setIsEditingNop(false);
+                  }
+                }
+              }}
+              title={
+                filterGroup === 'all'
+                  ? `Ubah Nama NOP / Judul (${schedule.nopName})`
+                  : `Ubah Nama Kelompok Ini`
+              }
+              className="min-h-[40px] px-2.5 py-2 bg-slate-900 hover:bg-emerald-600 text-slate-300 hover:text-white rounded-xl border border-slate-700 hover:border-emerald-500 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 select-none shrink-0"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
+              <span className="text-xs font-bold hidden sm:inline">
+                {filterGroup === 'all' ? 'Edit Judul NOP' : 'Edit Kelompok'}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
@@ -575,6 +749,88 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
         </div>
       </div>
 
+      {/* INLINE EDITOR FOR NOP NAME (SEPERTI DI GAMBAR DROPDOWN) */}
+      {isEditingNop && (
+        <div className="p-3 bg-slate-950 border-2 border-emerald-500/80 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xl">
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-xs font-black text-amber-400 font-mono uppercase whitespace-nowrap">
+              Ubah Nama NOP:
+            </span>
+            <input
+              type="text"
+              value={tempNopName}
+              onChange={(e) => setTempNopName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveNopName();
+                if (e.key === 'Escape') setIsEditingNop(false);
+              }}
+              autoFocus
+              placeholder="misal: NOP SOUTHERN"
+              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-black text-white uppercase focus:outline-none focus:border-emerald-500 flex-1"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={handleSaveNopName}
+              className="min-h-[36px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+            >
+              <Check className="w-4 h-4" />
+              <span>Simpan NOP</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditingNop(false)}
+              className="min-h-[36px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+            >
+              <X className="w-4 h-4" />
+              <span>Batal</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* INLINE EDITOR FOR SELECTED GROUP NAME */}
+      {editingGroupId && (
+        <div className="p-3 bg-slate-950 border-2 border-emerald-500/80 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xl">
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-xs font-black text-amber-400 font-mono uppercase whitespace-nowrap">
+              Ubah Nama Kelompok:
+            </span>
+            <input
+              type="text"
+              value={tempGroupName}
+              onChange={(e) => setTempGroupName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveGroupName();
+                if (e.key === 'Escape') setEditingGroupId(null);
+              }}
+              autoFocus
+              placeholder="misal: TO JAKTIM 1"
+              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono font-black text-white uppercase focus:outline-none focus:border-emerald-500 flex-1"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={handleSaveGroupName}
+              className="min-h-[36px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+            >
+              <Check className="w-4 h-4" />
+              <span>Simpan Kelompok</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingGroupId(null)}
+              className="min-h-[36px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+            >
+              <X className="w-4 h-4" />
+              <span>Batal</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* GROUPS AND PERSONNEL CARDS */}
       <div className="space-y-5">
         {filteredGroups.map((group) => (
@@ -589,6 +845,18 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                 <h3 className="text-sm sm:text-base font-black text-slate-100 font-mono tracking-wider uppercase">
                   {group.groupName} :
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingGroupId(group.id);
+                    setTempGroupName(group.groupName);
+                    setIsEditingNop(false);
+                  }}
+                  title={`Ubah nama kelompok ${group.groupName}`}
+                  className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
                 <span className="text-xs text-slate-400 font-mono bg-slate-950 px-2.5 py-0.5 rounded-full border border-slate-800">
                   {group.members.length} Personel
                 </span>
