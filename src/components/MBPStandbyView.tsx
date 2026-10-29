@@ -68,30 +68,39 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   const [deletePersonnelTarget, setDeletePersonnelTarget] = useState<PersonnelDeleteTarget | null>(null);
 
   // Apply real-time date change across schedules
-  const handleDateChange = (newDateDDMMYYYY: string) => {
+  const handleDateChange = (newDateDDMMYYYY: string, overrideTarget?: 'both' | 'inner' | 'outer') => {
+    const target = overrideTarget || targetScheduleForCalendar;
     const newDayName = getIndonesianDayName(newDateDDMMYYYY);
 
     const updateScheduleWithDate = (sched: StandbySchedule) => {
-      let newTitle = sched.title;
+      let newTitle = sched.title || '';
       const oldDate = sched.date;
       const oldDay = sched.dayName;
 
-      if (sched.isCustomTitle) {
-        if (oldDate && newTitle.includes(oldDate)) {
-          newTitle = newTitle.replace(oldDate, newDateDDMMYYYY);
-        } else {
-          const datePattern = /\d{1,2}-\d{1,2}-\d{4}/;
-          if (datePattern.test(newTitle)) {
-            newTitle = newTitle.replace(datePattern, newDateDDMMYYYY);
-          }
-        }
+      // 1. Replace date in title
+      const datePattern = /\d{1,2}-\d{1,2}-\d{4}/;
+      if (oldDate && newTitle.includes(oldDate)) {
+        newTitle = newTitle.replace(oldDate, newDateDDMMYYYY);
+      } else if (datePattern.test(newTitle)) {
+        newTitle = newTitle.replace(datePattern, newDateDDMMYYYY);
+      }
 
-        if (oldDay && newTitle.toLowerCase().includes(oldDay.toLowerCase())) {
-          const regexDay = new RegExp(oldDay, 'gi');
-          newTitle = newTitle.replace(regexDay, newDayName.toUpperCase());
+      // 2. Replace day name in title if present
+      const dayNamePattern = /(SENIN|SELASA|RABU|KAMIS|JUMAT|JUM'AT|SABTU|MINGGU)/gi;
+      if (oldDay && newTitle.toLowerCase().includes(oldDay.toLowerCase())) {
+        const regexDay = new RegExp(oldDay, 'gi');
+        newTitle = newTitle.replace(regexDay, newDayName.toUpperCase());
+      } else if (dayNamePattern.test(newTitle)) {
+        newTitle = newTitle.replace(dayNamePattern, newDayName.toUpperCase());
+      }
+
+      // 3. Fallback if title didn't contain date
+      if (!newTitle.includes(newDateDDMMYYYY)) {
+        if (sched.id === 'mbp-outer-bekasi' || sched.nopName === 'NOP BEKASI') {
+          newTitle = `JADWAL STANDBY TEAM MBP *DEPOTEL* BEKASI ${newDateDDMMYYYY}`;
+        } else {
+          newTitle = `JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}`;
         }
-      } else {
-        newTitle = buildScheduleTitleWithDay(newDateDDMMYYYY);
       }
 
       return {
@@ -102,10 +111,10 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
       };
     };
 
-    if (targetScheduleForCalendar === 'both' || targetScheduleForCalendar === 'inner') {
+    if (target === 'both' || target === 'inner') {
       onUpdateInnerSchedule(updateScheduleWithDate(innerSchedule));
     }
-    if (targetScheduleForCalendar === 'both' || targetScheduleForCalendar === 'outer') {
+    if (target === 'both' || target === 'outer') {
       onUpdateOuterSchedule(updateScheduleWithDate(outerSchedule));
     }
 
@@ -114,7 +123,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
 
   const handleSetTodayRealtime = () => {
     setTargetScheduleForCalendar('both');
-    handleDateChange(clock.dateStrDDMMYYYY);
+    handleDateChange(clock.dateStrDDMMYYYY, 'both');
   };
 
   const executeDeletePersonnel = () => {
