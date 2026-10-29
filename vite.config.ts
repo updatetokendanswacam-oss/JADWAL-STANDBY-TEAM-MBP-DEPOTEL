@@ -14,9 +14,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'JADWAL STANDBY TEAM MBP DEPOTEL',
+          name: 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM & OUTER BEKASI',
           short_name: 'MBP DEPOTEL',
-          description: 'Aplikasi Operasional Jadwal Standby Team MBP Depotel Inner Jakarta Timur',
+          description: 'Aplikasi Operasional PWA Jadwal Standby Team MBP Depotel Inner Jaktim & Outer Bekasi',
           theme_color: '#020617',
           background_color: '#020617',
           display: 'standalone',

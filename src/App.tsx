@@ -5,7 +5,11 @@ import {
   Personnel,
   AppUser
 } from './types';
-import { INITIAL_STANDBY_SCHEDULE, INITIAL_APP_USERS } from './data/initialData';
+import {
+  INITIAL_SCHEDULE_INNER_JAKTIM,
+  INITIAL_SCHEDULE_OUTER_BEKASI,
+  INITIAL_APP_USERS
+} from './data/initialData';
 import { Header } from './components/Header';
 import { MBPStandbyView } from './components/MBPStandbyView';
 import { BroadcastWAView } from './components/BroadcastWAView';
@@ -17,20 +21,31 @@ import {
   Home,
   Settings,
   ShieldCheck,
-  Zap,
-  MessageCircle
+  MessageCircle,
+  Building2,
+  Layers
 } from 'lucide-react';
 
-const STORAGE_KEY_SCHEDULE = 'mbp_standby_schedule_v5';
-const STORAGE_KEY_USERS = 'mbp_app_users_v5';
+const STORAGE_KEY_INNER = 'mbp_schedule_inner_jaktim_v7';
+const STORAGE_KEY_OUTER = 'mbp_schedule_outer_bekasi_v7';
+const STORAGE_KEY_USERS = 'mbp_app_users_v7';
 
 export default function App() {
-  const [schedule, setSchedule] = useState<StandbySchedule>(() => {
+  const [innerSchedule, setInnerSchedule] = useState<StandbySchedule>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_SCHEDULE);
-      return saved ? JSON.parse(saved) : INITIAL_STANDBY_SCHEDULE;
-    } catch (e) {
-      return INITIAL_STANDBY_SCHEDULE;
+      const saved = localStorage.getItem(STORAGE_KEY_INNER);
+      return saved ? JSON.parse(saved) : INITIAL_SCHEDULE_INNER_JAKTIM;
+    } catch {
+      return INITIAL_SCHEDULE_INNER_JAKTIM;
+    }
+  });
+
+  const [outerSchedule, setOuterSchedule] = useState<StandbySchedule>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_OUTER);
+      return saved ? JSON.parse(saved) : INITIAL_SCHEDULE_OUTER_BEKASI;
+    } catch {
+      return INITIAL_SCHEDULE_OUTER_BEKASI;
     }
   });
 
@@ -38,29 +53,37 @@ export default function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USERS);
       return saved ? JSON.parse(saved) : INITIAL_APP_USERS;
-    } catch (e) {
+    } catch {
       return INITIAL_APP_USERS;
     }
   });
 
   const [activeView, setActiveView] = useState<ViewMode>('mbp_standby');
-
-  // Toast notification state
+  const [activeBroadcastList, setActiveBroadcastList] = useState<'inner' | 'outer' | 'combined'>('combined');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Personnel Modal state
   const [isPersonnelModalOpen, setIsPersonnelModalOpen] = useState(false);
+  const [modalScheduleId, setModalScheduleId] = useState<string>(innerSchedule.id);
   const [modalGroupId, setModalGroupId] = useState<string>('grp-jaktim-1');
   const [editingMember, setEditingMember] = useState<Personnel | null>(null);
 
-  // Save data to localStorage
+  // Persistence Effects
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_SCHEDULE, JSON.stringify(schedule));
+      localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(innerSchedule));
     } catch (e) {
-      console.error('Failed to save schedule', e);
+      console.error('Failed to save inner schedule', e);
     }
-  }, [schedule]);
+  }, [innerSchedule]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(outerSchedule));
+    } catch (e) {
+      console.error('Failed to save outer schedule', e);
+    }
+  }, [outerSchedule]);
 
   useEffect(() => {
     try {
@@ -77,20 +100,26 @@ export default function App() {
     }, 3000);
   };
 
-  const handleOpenAddMember = (groupId: string) => {
+  const handleOpenAddMember = (scheduleId: string, groupId: string) => {
+    setModalScheduleId(scheduleId);
     setModalGroupId(groupId);
     setEditingMember(null);
     setIsPersonnelModalOpen(true);
   };
 
-  const handleEditMember = (groupId: string, member: Personnel) => {
+  const handleEditMember = (scheduleId: string, groupId: string, member: Personnel) => {
+    setModalScheduleId(scheduleId);
     setModalGroupId(groupId);
     setEditingMember(member);
     setIsPersonnelModalOpen(true);
   };
 
   const handleSaveMember = (targetGroupId: string, memberData: Personnel) => {
-    const updatedGroups = schedule.groups.map((grp) => {
+    const isInner = modalScheduleId === innerSchedule.id;
+    const targetSchedule = isInner ? innerSchedule : outerSchedule;
+    const updateFn = isInner ? setInnerSchedule : setOuterSchedule;
+
+    const updatedGroups = targetSchedule.groups.map((grp) => {
       const cleanMembers = grp.members.filter((m) => m.id !== memberData.id);
 
       if (grp.id === targetGroupId) {
@@ -114,8 +143,8 @@ export default function App() {
       };
     });
 
-    setSchedule({
-      ...schedule,
+    updateFn({
+      ...targetSchedule,
       groups: updatedGroups
     });
 
@@ -126,21 +155,26 @@ export default function App() {
     );
   };
 
-  const handleQuickCopy = () => {
-    const text = formatStandbyScheduleToWA(schedule);
-    navigator.clipboard.writeText(text);
-    showToast(`Jadwal ${schedule.dayName || ''} ${schedule.date || '29-10-2026'} disalin ke Clipboard!`);
+  const handleQuickCopyAll = () => {
+    const textInner = formatStandbyScheduleToWA(innerSchedule);
+    const textOuter = formatStandbyScheduleToWA(outerSchedule);
+    const combinedText = `${textInner}\n\n==========================================\n\n${textOuter}`;
+
+    navigator.clipboard.writeText(combinedText);
+    showToast('Seluruh Jadwal Standby (INNER JAKTIM & OUTER BEKASI) disalin ke Clipboard!');
   };
 
   const handleResetData = () => {
     if (
       window.confirm(
-        'Apakah Anda yakin ingin mengembalikan data ke jadwal awal 29-10-2026?'
+        'Apakah Anda yakin ingin mengembalikan data ke jadwal awal standar (INNER JAKTIM & OUTER BEKASI)?'
       )
     ) {
-      setSchedule(INITIAL_STANDBY_SCHEDULE);
+      setInnerSchedule(INITIAL_SCHEDULE_INNER_JAKTIM);
+      setOuterSchedule(INITIAL_SCHEDULE_OUTER_BEKASI);
       setUsers(INITIAL_APP_USERS);
-      localStorage.removeItem(STORAGE_KEY_SCHEDULE);
+      localStorage.removeItem(STORAGE_KEY_INNER);
+      localStorage.removeItem(STORAGE_KEY_OUTER);
       localStorage.removeItem(STORAGE_KEY_USERS);
       showToast('Data berhasil direset ke jadwal awal!');
     }
@@ -148,37 +182,54 @@ export default function App() {
 
   const handleRefreshData = () => {
     try {
-      const savedSchedule = localStorage.getItem(STORAGE_KEY_SCHEDULE);
-      if (savedSchedule) {
-        setSchedule(JSON.parse(savedSchedule));
-      }
+      const savedInner = localStorage.getItem(STORAGE_KEY_INNER);
+      if (savedInner) setInnerSchedule(JSON.parse(savedInner));
+
+      const savedOuter = localStorage.getItem(STORAGE_KEY_OUTER);
+      if (savedOuter) setOuterSchedule(JSON.parse(savedOuter));
+
       const savedUsers = localStorage.getItem(STORAGE_KEY_USERS);
-      if (savedUsers) {
-        setUsers(JSON.parse(savedUsers));
-      }
+      if (savedUsers) setUsers(JSON.parse(savedUsers));
+
       window.dispatchEvent(new Event('storage'));
+      showToast('Perubahan data berhasil diperbarui!');
     } catch (e) {
       console.error('Failed to refresh data', e);
     }
   };
 
-  const currentDateDisplay = schedule.date || '29-10-2026';
-  const currentDayDisplay = schedule.dayName ? `${schedule.dayName.toUpperCase()}, ` : '';
+  const activeTargetGroups = modalScheduleId === innerSchedule.id ? innerSchedule.groups : outerSchedule.groups;
+
+  // Active Broadcast Schedule Object
+  const getActiveBroadcastSchedule = (): StandbySchedule => {
+    if (activeBroadcastList === 'inner') return innerSchedule;
+    if (activeBroadcastList === 'outer') return outerSchedule;
+
+    // Combined Schedule representation for Broadcast WA view
+    return {
+      id: 'combined-schedule',
+      title: `${innerSchedule.title}\n\n==============================\n\n${outerSchedule.title}`,
+      nopName: 'INNER JAKTIM & OUTER BEKASI',
+      date: innerSchedule.date,
+      dayName: innerSchedule.dayName,
+      groups: [...innerSchedule.groups, ...outerSchedule.groups]
+    };
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 relative overflow-x-hidden">
       {/* Background Watermark Logo (Emblem) */}
-      <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-[0.07] select-none overflow-hidden p-4">
+      <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center opacity-[0.06] select-none overflow-hidden p-4">
         <img
           src="/logo-emblem.png"
           alt="JADWAL STANDBY TEAM MBP DEPOTEL Background Emblem"
-          className="w-[500px] h-[500px] sm:w-[700px] sm:h-[700px] object-contain drop-shadow-[0_0_50px_rgba(234,179,8,0.3)] animate-pulse duration-[5000ms]"
+          className="w-[500px] h-[500px] sm:w-[750px] sm:h-[750px] object-contain drop-shadow-[0_0_60px_rgba(234,179,8,0.35)] animate-pulse duration-[6000ms]"
         />
       </div>
 
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 bg-emerald-600 text-white font-semibold text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-400/30 animate-bounce">
+        <div className="fixed top-20 right-4 z-50 bg-emerald-600 text-white font-semibold text-xs px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 border border-emerald-400/30 animate-bounce">
           <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-200" />
           <span>{toastMessage}</span>
         </div>
@@ -188,34 +239,84 @@ export default function App() {
       <Header
         activeView={activeView}
         onSelectView={setActiveView}
-        onQuickCopy={handleQuickCopy}
+        onQuickCopy={handleQuickCopyAll}
         onResetData={handleResetData}
       />
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-24 sm:pb-28">
-        {/* View Switcher */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-28 sm:pb-32">
+        {/* VIEW 1: MAIN DASHBOARD STANDBY (CONTAINS 2 STACKED LISTS: ATAS & BAWAH) */}
         {activeView === 'mbp_standby' && (
           <MBPStandbyView
-            schedule={schedule}
-            onUpdateSchedule={setSchedule}
+            innerSchedule={innerSchedule}
+            outerSchedule={outerSchedule}
+            onUpdateInnerSchedule={setInnerSchedule}
+            onUpdateOuterSchedule={setOuterSchedule}
             onOpenAddMember={handleOpenAddMember}
             onEditMember={handleEditMember}
             onShowToast={showToast}
           />
         )}
 
+        {/* VIEW 2: BROADCAST WA GENERATOR */}
         {activeView === 'broadcast_wa' && (
-          <BroadcastWAView
-            schedule={schedule}
-            onShowToast={showToast}
-          />
+          <div className="space-y-4">
+            {/* List Selector for Broadcast WA */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-amber-400" />
+                <span>PILIH TAMPILAN TEXT BROADCAST WA:</span>
+              </span>
+
+              <div className="grid grid-cols-3 gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setActiveBroadcastList('combined')}
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
+                    activeBroadcastList === 'combined'
+                      ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  GABUNGAN 📜
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBroadcastList('inner')}
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
+                    activeBroadcastList === 'inner'
+                      ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  JAKTIM 🏢
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBroadcastList('outer')}
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
+                    activeBroadcastList === 'outer'
+                      ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-400'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  BEKASI 🏬
+                </button>
+              </div>
+            </div>
+
+            <BroadcastWAView
+              schedule={getActiveBroadcastSchedule()}
+              onShowToast={showToast}
+            />
+          </div>
         )}
 
+        {/* VIEW 3: SETTINGS & USER MANAGEMENT */}
         {activeView === 'settings' && (
           <SettingsView
-            schedule={schedule}
-            onUpdateSchedule={setSchedule}
+            schedule={innerSchedule}
+            onUpdateSchedule={setInnerSchedule}
             users={users}
             onUpdateUsers={setUsers}
             onResetAllData={handleResetData}
@@ -230,14 +331,16 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
           {/* Main Footer Navigation Buttons */}
           <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full border border-amber-500/60 p-0.5 bg-slate-950 shrink-0">
+                <img src="/logo-emblem.png" alt="Emblem" className="w-full h-full object-cover rounded-full" />
+              </div>
               <div>
-                <span className="font-extrabold text-slate-100 text-sm block">
-                  DEPOTEL INNER JAKTIM — MENU UTAMA
+                <span className="font-black text-slate-100 text-sm block">
+                  JADWAL STANDBY TEAM MBP DEPOTEL
                 </span>
-                <span className="text-slate-400 text-xs font-mono">
-                  {schedule.nopName || 'NOP SOUTHERN'} ({currentDayDisplay}{currentDateDisplay})
+                <span className="text-amber-400 text-xs font-mono font-bold">
+                  INNER JAKTIM & OUTER BEKASI
                 </span>
               </div>
             </div>
@@ -290,10 +393,10 @@ export default function App() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-slate-100 font-extrabold text-sm">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <span>DEPOTEL INNER JAKTIM</span>
+                <span>DEPOTEL INNER JAKTIM & OUTER BEKASI</span>
               </div>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Aplikasi Operasional Jadwal Standby Team MBP Depotel Inner Jakarta Timur NOP Southern.
+                Aplikasi Operasional PWA Jadwal Standby Team MBP Depotel Inner Jakarta Timur (NOP Southern) & Outer Bekasi (NOP Bekasi).
               </p>
             </div>
 
@@ -309,7 +412,7 @@ export default function App() {
                     className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <Home className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Beranda Standby MBP</span>
+                    <span>Beranda Standby MBP (2 List)</span>
                   </button>
                 </li>
                 <li>
@@ -357,11 +460,11 @@ export default function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 text-[11px] font-mono">
             <div>
-              © 2026 MBP Depotel Inner Jakarta Timur. All rights reserved.
+              © 2026 JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM & OUTER BEKASI.
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Terhubung WhatsApp</span>
+              <span>PWA Ready & Terhubung WhatsApp</span>
             </div>
           </div>
         </div>
@@ -416,7 +519,7 @@ export default function App() {
         isOpen={isPersonnelModalOpen}
         onClose={() => setIsPersonnelModalOpen(false)}
         groupId={modalGroupId}
-        groups={schedule.groups}
+        groups={activeTargetGroups}
         editingMember={editingMember}
         onSave={handleSaveMember}
       />

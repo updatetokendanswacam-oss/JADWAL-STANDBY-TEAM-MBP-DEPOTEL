@@ -53,7 +53,8 @@ export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
 
   // Title line
   lines.push(schedule.title);
-  lines.push('______________________');
+  lines.push('');
+  lines.push('__________________________________________');
   lines.push('');
 
   // NOP Name
@@ -63,14 +64,15 @@ export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
   // Groups & Members
   schedule.groups.forEach((group) => {
     lines.push(`${group.groupName} :`);
+    lines.push('');
     group.members.forEach((member, idx) => {
       const emoji = getStatusEmoji(member.status);
-      lines.push(`${idx + 1}. ${emoji} ${member.name} ☆ ${member.phone}`);
+      lines.push(`${idx + 1}. ${emoji}${member.name}☆${member.phone}`);
     });
     lines.push(''); // Empty line between groups
   });
 
-  lines.push('_______________________');
+  lines.push('______________________________________');
   lines.push('');
 
   // Keterangan / Legend
@@ -81,3 +83,4 @@ export function formatStandbyScheduleToWA(schedule: StandbySchedule): string {
 
   return lines.join('\n');
 }
+

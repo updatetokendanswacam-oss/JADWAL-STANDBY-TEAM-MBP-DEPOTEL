@@ -1,6 +1,6 @@
 {
-  "name": "JADWAL STANDBY TEAM MBP DEPOTEL",
-  "description": "Aplikasi Operasional Jadwal Standby Team MBP Depotel Inner Jakarta Timur NOP Southern",
+  "name": "JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM & OUTER BEKASI",
+  "description": "Aplikasi Operasional PWA Jadwal Standby Team MBP Depotel Inner Jaktim & Outer Bekasi",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
