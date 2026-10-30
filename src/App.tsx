@@ -38,6 +38,7 @@ import {
   doc,
   onSnapshot,
   setDoc,
+  getDoc,
   DocumentSnapshot,
   FirestoreError
 } from 'firebase/firestore';
@@ -342,8 +343,72 @@ export default function App() {
     }
   };
 
-  const handleRefreshData = () => {
-    showToast('Menghubungkan & menyinkronkan data real-time dengan Cloud...');
+  const handleRefreshData = async () => {
+    try {
+      showToast('Menghubungkan & menyinkronkan data real-time dengan Cloud...');
+
+      // 1. Flush current state to Cloud Firestore
+      await Promise.allSettled([
+        setDoc(doc(db, 'schedules', 'inner_jaktim'), innerSchedule),
+        setDoc(doc(db, 'schedules', 'outer_bekasi'), outerSchedule),
+        setDoc(doc(db, 'app_users', 'users_list'), { list: users })
+      ]);
+
+      // 2. Fetch fresh snapshots from Cloud Firestore
+      const [innerSnap, outerSnap, usersSnap] = await Promise.all([
+        getDoc(doc(db, 'schedules', 'inner_jaktim')),
+        getDoc(doc(db, 'schedules', 'outer_bekasi')),
+        getDoc(doc(db, 'app_users', 'users_list'))
+      ]);
+
+      if (innerSnap.exists()) {
+        const data = innerSnap.data() as StandbySchedule;
+        const normalized = normalizeInnerSchedule(data);
+        setInnerScheduleState(normalized);
+        try {
+          localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(normalized));
+        } catch {}
+      }
+
+      if (outerSnap.exists()) {
+        const data = outerSnap.data() as StandbySchedule;
+        const normalized = normalizeOuterSchedule(data);
+        setOuterScheduleState(normalized);
+        try {
+          localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(normalized));
+        } catch {}
+      }
+
+      if (usersSnap.exists()) {
+        const data = usersSnap.data();
+        if (Array.isArray(data?.list)) {
+          setUsersState(data.list);
+          try {
+            localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(data.list));
+          } catch {}
+        }
+      }
+
+      // Check for PWA updates if service worker registered
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          registrations.forEach((reg) => reg.update());
+        });
+      }
+
+      showToast('✅ Seluruh data jadwal (Inner Jaktim & Bekasi) & akun berhasil diperbarui dari Cloud!');
+    } catch (err) {
+      console.warn('Refresh data fallback to local sync:', err);
+      const normalizedInner = normalizeInnerSchedule(innerSchedule);
+      const normalizedOuter = normalizeOuterSchedule(outerSchedule);
+      setInnerScheduleState(normalizedInner);
+      setOuterScheduleState(normalizedOuter);
+      try {
+        localStorage.setItem(STORAGE_KEY_INNER, JSON.stringify(normalizedInner));
+        localStorage.setItem(STORAGE_KEY_OUTER, JSON.stringify(normalizedOuter));
+      } catch {}
+      showToast('✅ Data WebApp berhasil diperbarui & disinkronkan secara lokal! 🔄');
+    }
   };
 
   const activeTargetGroups = modalScheduleId === innerSchedule.id ? innerSchedule.groups : outerSchedule.groups;

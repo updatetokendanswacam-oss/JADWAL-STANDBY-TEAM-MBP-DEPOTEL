@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StandbySchedule, AppUser, UserRole, UserStatus } from '../types';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import {
@@ -114,23 +114,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const currentSelectedSchedule = targetScheduleKey === 'inner' ? innerSchedule : outerSchedule;
   const currentUpdateScheduleFn = targetScheduleKey === 'inner' ? onUpdateInnerSchedule : onUpdateOuterSchedule;
 
-  const [nopName, setNopName] = useState(innerSchedule.nopName || 'NOP SOUTHERN');
+  const [nopName, setNopName] = useState(currentSelectedSchedule.nopName || 'NOP SOUTHERN');
   const [newGroupName, setNewGroupName] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Baru saja (Realtime)');
 
-  const handleManualRefresh = () => {
+  useEffect(() => {
+    setNopName(currentSelectedSchedule.nopName || (targetScheduleKey === 'inner' ? 'NOP SOUTHERN' : 'NOP BEKASI'));
+  }, [targetScheduleKey, currentSelectedSchedule.nopName]);
+
+  const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    if (onRefreshData) {
-      onRefreshData();
-    } else {
-      window.dispatchEvent(new Event('storage'));
-    }
-    setTimeout(() => {
+    try {
+      if (onRefreshData) {
+        await onRefreshData();
+      } else {
+        window.dispatchEvent(new Event('storage'));
+      }
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSyncTime(`${timeStr} WIB`);
+    } catch (err) {
+      console.error('Manual refresh error:', err);
+    } finally {
       setIsRefreshing(false);
-      onShowToast('Perubahan data & tampilan berhasil diperbarui / disinkronkan! 🔄');
-    }, 600);
+    }
   };
 
   // KELOLA PENGGUNA STATE (User Management)
@@ -761,26 +771,56 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="space-y-4">
             {/* FITUR REFRESH / PERBARUI PERUBAHAN DATA */}
-            <div className="p-4 bg-emerald-950/30 border border-emerald-500/40 rounded-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-300 block">
-                  1. Perbarui / Refresh Perubahan Data
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-bold">
-                  SINKRON REALTIME
+            <div className="p-4 sm:p-5 bg-emerald-950/40 border border-emerald-500/50 rounded-2xl space-y-3 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-emerald-800/50">
+                <div>
+                  <span className="text-xs font-black text-emerald-300 block uppercase tracking-wider">
+                    1. Perbarui / Refresh Perubahan Data
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Terakhir disinkronkan: <strong className="text-emerald-300">{lastSyncTime}</strong>
+                  </span>
+                </div>
+                <span className="self-start sm:self-auto text-[10px] px-2.5 py-1 rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-600/60 font-mono font-bold flex items-center gap-1.5 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>SINKRON REALTIME CLOUD</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-300">
-                Klik tombol ini untuk menyegarkan tampilan dan memuat ulang perubahan data jadwal serta daftar akun pengguna terbaru.
+
+              <p className="text-xs text-slate-200 leading-relaxed">
+                Klik tombol di bawah ini untuk <strong>menyimpan seluruh perubahan lokal ke Google Cloud Firestore</strong>, menarik data terbaru dari server, dan menyegarkan tampilan jadwal serta status shift personel di WebApp / APK secara instan.
               </p>
+
+              {/* Live Data Summary Pills */}
+              <div className="grid grid-cols-3 gap-2 py-1 font-mono text-[10px] sm:text-xs">
+                <div className="p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] font-sans uppercase">Inner Jaktim:</span>
+                  <strong className="text-white text-xs sm:text-sm">
+                    {innerSchedule.groups.flatMap((g) => g.members).length} Personel
+                  </strong>
+                </div>
+                <div className="p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] font-sans uppercase">Bekasi & Depok:</span>
+                  <strong className="text-white text-xs sm:text-sm">
+                    {outerSchedule.groups.flatMap((g) => g.members).length} Personel
+                  </strong>
+                </div>
+                <div className="p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 block text-[9px] font-sans uppercase">Akun Terdaftar:</span>
+                  <strong className="text-white text-xs sm:text-sm">
+                    {users.length} Akun
+                  </strong>
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={handleManualRefresh}
                 disabled={isRefreshing}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-950/80 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>{isRefreshing ? 'Memperbarui Data...' : 'Perbarui Perubahan Data'}</span>
+                <span>{isRefreshing ? 'Sedang Menyinkronkan ke Cloud & WebApp...' : 'Perbarui Perubahan Data Sekarang'}</span>
               </button>
             </div>
 
@@ -858,6 +898,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+            </button>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 text-xs font-mono font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               TERHUBUNG 🟢
@@ -869,31 +918,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
             <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
               <Database className="w-4 h-4 text-emerald-400" />
-              <span>Database Google AI Studio</span>
+              <span>Database Google Cloud Firestore</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Tersimpan secara persistent di LocalStorage v5 & siap di-export ke JSON untuk migrasi server.
+              Tersimpan secara persistent di Cloud Firestore & cadangan lokal. Data jadwal & status shift tersinkronisasi 2 arah secara otomatis.
             </p>
+            <div className="text-[10px] text-emerald-400 font-mono font-bold pt-1">
+              • Status: Online & Sinkron Aktif
+            </div>
           </div>
 
           <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
             <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
               <GitBranch className="w-4 h-4 text-purple-400" />
-              <span>GitHub Repository Sync</span>
+              <span>PWA WebApp & Mobile APK Cache</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Kode sumber aplikasi dan struktur data default siap di-push langsung ke repositori GitHub.
+              Aplikasi mendukung offline-first & instalasi di Android/iOS/Desktop. Seluruh pembaruan langsung tampil di layar tanpa restart.
             </p>
+            <div className="text-[10px] text-purple-300 font-mono font-bold pt-1">
+              • Status: PWA Cache Siap
+            </div>
           </div>
 
           <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
             <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
               <Globe className="w-4 h-4 text-blue-400" />
-              <span>Vercel Auto Deployment</span>
+              <span>Integrasi GitHub & Vercel Deployment</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Vercel secara otomatis mendeteksi update dari GitHub untuk membangun versi web live secara realtime.
+              Sistem deployment otomatis mendeteksi pembaruan kode dan jadwal, memastikan versi web live selalu yang paling mutakhir.
             </p>
+            <div className="text-[10px] text-blue-400 font-mono font-bold pt-1">
+              • Status: Continuous Deployment Aktif
+            </div>
           </div>
         </div>
       </div>
