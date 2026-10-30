@@ -47,7 +47,9 @@ export const PersonnelModal: React.FC<PersonnelModalProps> = ({
       id: editingMember ? editingMember.id : `p-${Date.now()}`,
       name: name.toUpperCase().trim(),
       phone: phone.replace(/[^0-9]/g, '').trim(),
-      status
+      status,
+      shiftPattern: editingMember?.shiftPattern,
+      shiftOffset: editingMember?.shiftOffset
     };
 
     onSave(selectedGroupId, memberData);

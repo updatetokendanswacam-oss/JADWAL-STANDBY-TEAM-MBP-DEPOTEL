@@ -20,6 +20,7 @@ import {
   formatStandbyScheduleToWA,
   formatCombinedStandbyScheduleToWA
 } from './utils/whatsappFormatter';
+import { applyAutoShiftToSchedule } from './utils/shiftScheduleCalculator';
 import {
   CheckCircle2,
   Home,
@@ -61,20 +62,24 @@ const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
     }
     return grp;
   });
-  return {
+  const normalized: StandbySchedule = {
     ...sched,
     headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM',
+    subBadgeTitle: sched.subBadgeTitle || 'DEPOTEL INNER JAKTIM',
     nopName: nop,
     groups: updatedGroups
   };
+  return applyAutoShiftToSchedule(normalized);
 };
 
 const normalizeOuterSchedule = (sched: StandbySchedule): StandbySchedule => {
-  return {
+  const normalized: StandbySchedule = {
     ...sched,
     headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL BEKASI',
+    subBadgeTitle: sched.subBadgeTitle || 'DEPOTEL BEKASI',
     nopName: sched.nopName || 'NOP BEKASI'
   };
+  return applyAutoShiftToSchedule(normalized);
 };
 
 export default function App() {

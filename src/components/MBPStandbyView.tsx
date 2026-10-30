@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StandbySchedule, MemberStatus, Personnel, AppUser } from '../types';
+import { StandbySchedule, MemberStatus, Personnel, AppUser, ShiftPatternType } from '../types';
 import { KeteranganLegend } from './KeteranganLegend';
 import { CalendarDatePickerModal } from './CalendarDatePickerModal';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { EditShiftModal } from './EditShiftModal';
 import { useRealtimeClock } from '../hooks/useRealtimeClock';
 import {
   formatStandbyScheduleToWA,
@@ -13,6 +14,10 @@ import {
   formatIndonesianDateFull,
   getIndonesianDayName
 } from '../utils/dateUtils';
+import {
+  calculateShiftInfo,
+  applyAutoShiftToSchedule
+} from '../utils/shiftScheduleCalculator';
 import {
   Users,
   Copy,
@@ -34,7 +39,8 @@ import {
   ShieldAlert,
   Info,
   Shield,
-  Lock
+  Lock,
+  Sparkles
 } from 'lucide-react';
 
 interface MBPStandbyViewProps {
@@ -74,12 +80,8 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [deletePersonnelTarget, setDeletePersonnelTarget] = useState<PersonnelDeleteTarget | null>(null);
 
-  // Apply real-time date change across BOTH schedules automatically (Admin only)
+  // Apply real-time date change across BOTH schedules and recalculate shift patterns automatically
   const handleDateChange = (newDateDDMMYYYY: string) => {
-    if (!isAdmin) {
-      onShowToast('Hanya akun Admin yang dapat merubah tanggal jadwal.');
-      return;
-    }
     const newDayName = getIndonesianDayName(newDateDDMMYYYY);
 
     const updateScheduleWithDate = (sched: StandbySchedule, defaultAreaName: string) => {
@@ -96,22 +98,35 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
         newTitle = `JADWAL STANDBY TEAM MBP *DEPOTEL* ${defaultAreaName} ${newDateDDMMYYYY}`;
       }
 
-      return {
+      const updatedSched: StandbySchedule = {
         ...sched,
         date: newDateDDMMYYYY,
         dayName: newDayName,
         title: newTitle
       };
+
+      // Automatically recalculate work & holiday statuses based on shift cycle!
+      return applyAutoShiftToSchedule(updatedSched);
     };
 
     onUpdateInnerSchedule(updateScheduleWithDate(innerSchedule, 'INNER JAKTIM'));
     onUpdateOuterSchedule(updateScheduleWithDate(outerSchedule, 'BEKASI'));
 
-    onShowToast(`Tanggal semua list berhasil diperbarui ke: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}`);
+    onShowToast(`Tanggal berhasil diperbarui ke: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}. Pola kerja & libur otomatis disesuaikan! 🔄`);
   };
 
   const handleSetTodayRealtime = () => {
     handleDateChange(clock.dateStrDDMMYYYY);
+  };
+
+  const handleRecalculateShifts = (target: 'inner' | 'outer') => {
+    if (target === 'inner') {
+      onUpdateInnerSchedule(applyAutoShiftToSchedule(innerSchedule, true));
+      onShowToast('Pola 4 Kerja - 2 Libur (TO JAKTIM 1 & 2) berhasil dihitung ulang! ⚡');
+    } else {
+      onUpdateOuterSchedule(applyAutoShiftToSchedule(outerSchedule, true));
+      onShowToast('Pola 6K-2L (Bekasi) & 1 Mgg Libur/Bln (Depok) berhasil dihitung ulang! ⚡');
+    }
   };
 
   const executeDeletePersonnel = () => {
@@ -264,6 +279,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
           onOpenCalendarModal={() => setIsCalendarModalOpen(true)}
           onShowToast={onShowToast}
           isAdmin={isAdmin}
+          onRecalculateShifts={() => handleRecalculateShifts('inner')}
         />
       )}
 
@@ -285,20 +301,19 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
           onOpenCalendarModal={() => setIsCalendarModalOpen(true)}
           onShowToast={onShowToast}
           isAdmin={isAdmin}
+          onRecalculateShifts={() => handleRecalculateShifts('outer')}
         />
       )}
 
       <KeteranganLegend />
 
-      {/* Visual Calendar Date Picker Modal (Admin only) */}
-      {isAdmin && (
-        <CalendarDatePickerModal
-          isOpen={isCalendarModalOpen}
-          onClose={() => setIsCalendarModalOpen(false)}
-          currentDateDDMMYYYY={innerSchedule.date || clock.dateStrDDMMYYYY}
-          onSelectDate={handleDateChange}
-        />
-      )}
+      {/* Visual Calendar Date Picker Modal (Accessible for both User & Admin) */}
+      <CalendarDatePickerModal
+        isOpen={isCalendarModalOpen}
+        onClose={() => setIsCalendarModalOpen(false)}
+        currentDateDDMMYYYY={innerSchedule.date || clock.dateStrDDMMYYYY}
+        onSelectDate={handleDateChange}
+      />
 
       {/* Personnel Delete Modal */}
       <ConfirmDeleteModal
@@ -325,6 +340,7 @@ interface SingleScheduleSectionProps {
   onOpenCalendarModal: () => void;
   onShowToast: (msg: string) => void;
   isAdmin: boolean;
+  onRecalculateShifts?: () => void;
 }
 
 const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
@@ -338,22 +354,30 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   onPromptDelete,
   onOpenCalendarModal,
   onShowToast,
-  isAdmin
+  isAdmin,
+  onRecalculateShifts
 }) => {
   const [copied, setCopied] = useState(false);
   const [filterGroup, setFilterGroup] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const currentHeading = schedule.headerTitle || headingTitle;
+  const currentBadge = schedule.subBadgeTitle || listTitleLabel;
   const [isEditingHeading, setIsEditingHeading] = useState(false);
   const [tempHeading, setTempHeading] = useState(currentHeading);
+
+  const [isEditingBadge, setIsEditingBadge] = useState(false);
+  const [tempBadge, setTempBadge] = useState(currentBadge);
 
   useEffect(() => {
     setTempHeading(schedule.headerTitle || headingTitle);
   }, [schedule.headerTitle, headingTitle]);
 
+  useEffect(() => {
+    setTempBadge(schedule.subBadgeTitle || listTitleLabel);
+  }, [schedule.subBadgeTitle, listTitleLabel]);
+
   const handleSaveHeading = () => {
-    if (!isAdmin) return;
     if (!tempHeading.trim()) return;
     const newHeading = tempHeading.trim();
     onUpdateSchedule({
@@ -364,11 +388,22 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     onShowToast(`Judul list berhasil disimpan: "${newHeading}"`);
   };
 
-  // State for editing NOP name (Admin only)
+  const handleSaveBadge = () => {
+    if (!tempBadge.trim()) return;
+    const newBadge = tempBadge.trim().toUpperCase();
+    onUpdateSchedule({
+      ...schedule,
+      subBadgeTitle: newBadge
+    });
+    setIsEditingBadge(false);
+    onShowToast(`Label depotel berhasil disimpan: "${newBadge}"`);
+  };
+
+  // State for editing NOP name
   const [isEditingNop, setIsEditingNop] = useState(false);
   const [tempNopName, setTempNopName] = useState(schedule.nopName);
 
-  // State for editing group name (Admin only)
+  // State for editing group name
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [tempGroupName, setTempGroupName] = useState('');
 
@@ -401,6 +436,41 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     onShowToast(`Nama kelompok berhasil diubah menjadi: "${newName}"`);
   };
 
+  // State for editing shift pattern & cycle step for any personnel
+  interface ShiftEditTarget {
+    groupId: string;
+    groupName: string;
+    member: Personnel;
+    memberIndex: number;
+  }
+  const [editingShiftTarget, setEditingShiftTarget] = useState<ShiftEditTarget | null>(null);
+
+  const handleSaveShift = (
+    groupId: string,
+    memberId: string,
+    newPattern: ShiftPatternType,
+    newOffset: number,
+    newStatus: MemberStatus
+  ) => {
+    const updatedGroups = schedule.groups.map((group) => {
+      if (group.id !== groupId) return group;
+      return {
+        ...group,
+        members: group.members.map((m) => {
+          if (m.id !== memberId) return m;
+          return {
+            ...m,
+            shiftPattern: newPattern,
+            shiftOffset: newOffset,
+            status: newStatus,
+            isManualOverride: false
+          };
+        })
+      };
+    });
+    onUpdateSchedule({ ...schedule, groups: updatedGroups });
+  };
+
   const allMembers = schedule.groups.flatMap((g) => g.members);
   const totalPersonel = allMembers.length;
   const totalStandby = allMembers.filter((m) => m.status === 'standby').length;
@@ -411,7 +481,6 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   const currentDayName = schedule.dayName || getIndonesianDayName(currentDateStr);
 
   const handleAddEnterToTitle = () => {
-    if (!isAdmin) return;
     onUpdateSchedule({
       ...schedule,
       title: `${schedule.title}\n`,
@@ -422,7 +491,6 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   };
 
   const handleSaveCustomTitle = (newTitleValue: string) => {
-    if (!isAdmin) return;
     onUpdateSchedule({
       ...schedule,
       title: newTitleValue,
@@ -444,7 +512,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
         ...group,
         members: group.members.map((member) => {
           if (member.id !== memberId) return member;
-          return { ...member, status: newStatus };
+          return { ...member, status: newStatus, isManualOverride: true };
         })
       };
     });
@@ -520,28 +588,70 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
             />
           </div>
           <div>
-            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-              <span
-                className={`px-2.5 sm:px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-wider uppercase border ${badgeBg}`}
-              >
-                {listTitleLabel}
-              </span>
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 flex-wrap">
+              {/* DEPOTEL BADGE WITH EDIT ICON */}
+              {isEditingBadge ? (
+                <div className="flex items-center gap-1.5 animate-fadeIn">
+                  <input
+                    type="text"
+                    value={tempBadge}
+                    onChange={(e) => setTempBadge(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveBadge();
+                      if (e.key === 'Escape') setIsEditingBadge(false);
+                    }}
+                    autoFocus
+                    placeholder="misal: DEPOTEL INNER JAKTIM"
+                    className="px-2.5 py-1 bg-slate-950 border-2 border-emerald-500 rounded-lg text-xs font-bold text-white uppercase focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveBadge}
+                    className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg cursor-pointer active:scale-95 transition-all shadow-sm"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingBadge(false)}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer active:scale-95 transition-all"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempBadge(currentBadge);
+                    setIsEditingBadge(true);
+                  }}
+                  title="Klik icon edit untuk merubah label depotel ini"
+                  className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-black tracking-wider uppercase border ${badgeBg} hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer group active:scale-95 shadow-sm`}
+                >
+                  <span>{currentBadge}</span>
+                  <Edit2 className="w-3 h-3 text-emerald-400 group-hover:scale-110 transition-transform" />
+                </button>
+              )}
+
+              {/* NOP NAME BADGE WITH EDIT ICON */}
               <button
                 type="button"
                 onClick={() => {
                   setTempNopName(schedule.nopName);
                   setIsEditingNop(true);
                 }}
-                title="Klik untuk ubah nama NOP ini"
-                className="text-xs text-amber-400 font-mono font-bold hover:underline flex items-center gap-1 cursor-pointer group active:scale-95"
+                title="Klik icon edit untuk merubah nama NOP ini"
+                className="px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-xs text-amber-400 font-mono font-bold hover:underline flex items-center gap-1.5 cursor-pointer group active:scale-95 shadow-sm transition-all"
               >
                 <span>({schedule.nopName})</span>
-                <Edit2 className="w-3 h-3 opacity-70 group-hover:opacity-100 text-emerald-400" />
+                <Edit2 className="w-3 h-3 text-emerald-400 group-hover:scale-110 transition-transform" />
               </button>
             </div>
 
-            {isAdmin && isEditingHeading ? (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">
+            {/* MAIN LIST TITLE WITH EDIT ICON (CLICKABLE TO EDIT FOR ALL USERS) */}
+            {isEditingHeading ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1 animate-fadeIn">
                 <input
                   type="text"
                   value={tempHeading}
@@ -565,7 +675,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                     className="min-h-[38px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
                   >
                     <Check className="w-4 h-4" />
-                    <span>Simpan</span>
+                    <span>Simpan Judul</span>
                   </button>
                   <button
                     type="button"
@@ -582,23 +692,21 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
                   {currentHeading}
                 </h2>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTempHeading(currentHeading);
-                      setIsEditingHeading(true);
-                    }}
-                    title="Ubah Judul List Ini (Khusus Admin)"
-                    className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-800/90 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5 group select-none"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white transition-colors" />
-                    <span className="text-[11px] font-bold text-slate-300 group-hover:text-white">Edit Judul</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempHeading(currentHeading);
+                    setIsEditingHeading(true);
+                  }}
+                  title="Klik icon edit untuk merubah judul list ini"
+                  className="min-h-[34px] px-2.5 py-1 rounded-xl bg-slate-800/95 hover:bg-emerald-600 text-slate-200 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5 group select-none shrink-0"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white transition-colors" />
+                  <span className="text-[11px] font-bold">Edit Judul</span>
+                </button>
               </div>
             )}
           </div>
@@ -687,16 +795,14 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
             <div className="text-xs font-mono font-extrabold text-slate-200 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 flex-1 whitespace-pre-wrap leading-relaxed">
               {schedule.title}
             </div>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setIsEditingTitle(true)}
-                className="min-h-[36px] px-2.5 py-1.5 text-xs font-bold text-emerald-400 hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                <span>Edit</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsEditingTitle(true)}
+              className="min-h-[36px] px-2.5 py-1.5 text-xs font-bold text-emerald-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Edit Format</span>
+            </button>
           </div>
         )}
 
@@ -765,16 +871,29 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
               }}
               title={
                 filterGroup === 'all'
-                  ? `Ubah Nama NOP / Judul (${schedule.nopName})`
+                  ? `Ubah Judul / Nama NOP (${schedule.nopName})`
                   : `Ubah Nama Kelompok Ini`
               }
-              className="min-h-[40px] px-2.5 py-2 bg-slate-900 hover:bg-emerald-600 text-slate-300 hover:text-white rounded-xl border border-slate-700 hover:border-emerald-500 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 select-none shrink-0"
+              className="min-h-[40px] px-2.5 sm:px-3 py-2 bg-slate-900 hover:bg-emerald-600 text-slate-200 hover:text-white rounded-xl border border-slate-700 hover:border-emerald-500 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 select-none shrink-0"
             >
               <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
-              <span className="text-xs font-bold hidden sm:inline">
-                {filterGroup === 'all' ? 'Edit NOP' : 'Edit Kelompok'}
+              <span className="text-xs font-bold">
+                {filterGroup === 'all' ? 'Edit Judul / NOP' : 'Edit Kelompok'}
               </span>
             </button>
+
+            {onRecalculateShifts && (
+              <button
+                type="button"
+                onClick={onRecalculateShifts}
+                title="Hitung ulang otomatis seluruh pola hari kerja & hari libur untuk tanggal ini"
+                className="min-h-[40px] px-2.5 sm:px-3 py-2 bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-600/70 text-emerald-300 hover:text-white rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 select-none shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs font-bold hidden sm:inline">Hitung Pola Otomatis</span>
+                <span className="text-xs font-bold sm:hidden">Auto Shift</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -903,7 +1022,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
           >
             {/* Group Header */}
             <div className="bg-slate-900/90 px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-slate-800 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                 <h3 className="text-xs sm:text-base font-black text-slate-100 font-mono tracking-wider uppercase">
                   {group.groupName} :
@@ -921,7 +1040,14 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <span className="text-[10px] sm:text-xs text-slate-400 font-mono bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800 shrink-0">
-                  {group.members.length}
+                  {group.members.length} Personel
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-600/40 text-emerald-300 font-bold shrink-0">
+                  {group.groupName.includes('JAKTIM')
+                    ? '⚡ Pola 4 Hari Kerja / 2 Hari Libur'
+                    : group.groupName.includes('DEPOK')
+                    ? '⚡ 21 Hari Masuk & 7 Hari Libur (1 Mgg/Bln)'
+                    : '⚡ Pola 6 Hari Kerja / 2 Hari Libur'}
                 </span>
               </div>
 
@@ -934,6 +1060,23 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                 <span className="text-[11px] sm:text-xs">+ Personel</span>
               </button>
             </div>
+
+            {/* Depok Monthly Work & Holiday Calculation Strip */}
+            {group.groupName.includes('DEPOK') && (
+              <div className="bg-slate-950/90 px-3.5 sm:px-5 py-2 border-b border-slate-800/80 flex items-center justify-between gap-2 text-[11px] text-slate-300 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold font-mono text-[10px]">
+                    HITUNGAN 1 BULAN
+                  </span>
+                  <span>
+                    Terdapat <strong className="text-emerald-400 font-mono">21 Hari Masuk Kerja</strong> & <strong className="text-red-400 font-mono">7 Hari Libur (1 Minggu Penuh)</strong> per siklus 28 hari bergilir.
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                  (Bln 30 hr = 23 hr masuk • Bln 31 hr = 24 hr masuk)
+                </div>
+              </div>
+            )}
 
             {/* Member List */}
             <div className="divide-y divide-slate-800/80">
@@ -949,6 +1092,14 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                     member.name,
                     member.status,
                     `${currentDayName.toUpperCase()}, ${currentDateStr}`
+                  );
+
+                  // Calculate automatic work/holiday shift breakdown
+                  const shiftInfo = calculateShiftInfo(
+                    schedule.date || currentDateStr,
+                    group.groupName,
+                    member,
+                    index
                   );
 
                   return (
@@ -998,10 +1149,11 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                             </a>
                           </div>
 
-                          <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                            <span>Status:</span>
+                          {/* Calculated Shift Work & Holiday Info */}
+                          <div className="mt-1 flex items-center gap-1.5 sm:gap-2 flex-wrap text-[10px] sm:text-[11px]">
+                            {/* Status badge */}
                             <span
-                              className={`font-semibold capitalize px-1.5 py-0.5 rounded text-[10px] ${
+                              className={`font-bold capitalize px-1.5 py-0.5 rounded text-[10px] inline-flex items-center gap-1 ${
                                 member.status === 'standby'
                                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50'
                                   : member.status === 'off'
@@ -1009,7 +1161,53 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                                   : 'bg-amber-950 text-amber-300 border border-amber-800/50'
                               }`}
                             >
-                              {member.status === 'ijin_sakit' ? 'ijin/sakit' : member.status}
+                              <span>{member.status === 'standby' ? '🟢 Standby' : member.status === 'off' ? '🔴 Off' : '🟡 Ijin/Sakit'}</span>
+                            </span>
+
+                            {/* Shift Pattern (Click to Edit) */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingShiftTarget({
+                                  groupId: group.id,
+                                  groupName: group.groupName,
+                                  member,
+                                  memberIndex: index
+                                })
+                              }
+                              title={`Ubah pola shift ${member.name} (${shiftInfo.patternLabel})`}
+                              className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white font-mono font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all active:scale-95 group/shift shadow-sm"
+                            >
+                              <span>{shiftInfo.patternLabel}</span>
+                              <Edit2 className="w-2.5 h-2.5 text-emerald-400 group-hover/shift:scale-125 transition-transform" />
+                            </button>
+
+                            {/* Work / Holiday count (Click to Edit) */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingShiftTarget({
+                                  groupId: group.id,
+                                  groupName: group.groupName,
+                                  member,
+                                  memberIndex: index
+                                })
+                              }
+                              title={`Ubah status hari kerja/libur ${member.name} (${shiftInfo.cycleDayText})`}
+                              className={`px-2 py-0.5 rounded font-mono font-black text-[10px] border flex items-center gap-1 cursor-pointer transition-all active:scale-95 group/day ${
+                                shiftInfo.isWorkDay
+                                  ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-600/70 hover:border-emerald-400 text-emerald-300 shadow-sm'
+                                  : 'bg-red-950/80 hover:bg-red-900 border-red-600/70 hover:border-red-400 text-red-300 shadow-sm'
+                              }`}
+                            >
+                              <span>{shiftInfo.isWorkDay ? '🟢' : '🔴'}</span>
+                              <span>{shiftInfo.cycleDayText}</span>
+                              <Edit2 className="w-2.5 h-2.5 opacity-80 group-hover/day:opacity-100 group-hover/day:scale-125 transition-all text-white ml-0.5" />
+                            </button>
+
+                            {/* Remaining days counter */}
+                            <span className="text-[10px] text-slate-400 font-sans">
+                              ({shiftInfo.remainingDaysText})
                             </span>
                           </div>
                         </div>
@@ -1090,6 +1288,21 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
           </div>
         ))}
       </div>
+
+      {/* MODAL EDIT SHIFT POLA & HARI KERJA/LIBUR PERSONEL */}
+      {editingShiftTarget && (
+        <EditShiftModal
+          isOpen={!!editingShiftTarget}
+          onClose={() => setEditingShiftTarget(null)}
+          scheduleDate={schedule.date || currentDateStr}
+          groupName={editingShiftTarget.groupName}
+          groupId={editingShiftTarget.groupId}
+          member={editingShiftTarget.member}
+          memberIndex={editingShiftTarget.memberIndex}
+          onSaveShift={handleSaveShift}
+          onShowToast={onShowToast}
+        />
+      )}
     </div>
   );
 };
