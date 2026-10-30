@@ -33,6 +33,9 @@ interface SettingsViewProps {
   onResetAllData: () => void;
   onRefreshData?: () => void;
   onShowToast: (msg: string) => void;
+  isAdmin?: boolean;
+  currentUser?: AppUser | null;
+  onOpenAccountModal?: () => void;
 }
 
 interface DeleteTarget {
@@ -51,8 +54,61 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateUsers,
   onResetAllData,
   onRefreshData,
-  onShowToast
+  onShowToast,
+  isAdmin = false,
+  currentUser = null,
+  onOpenAccountModal
 }) => {
+  // If not admin, block entire settings modification view
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-slate-900/90 border-2 border-amber-500/40 rounded-3xl p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-2xl relative overflow-hidden backdrop-blur-xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-6 shadow-inner">
+            <Shield className="w-10 h-10" />
+          </div>
+          <span className="inline-block px-3 py-1 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-full uppercase tracking-wider mb-3">
+            Akses Khusus Admin
+          </span>
+          <h2 className="text-2xl font-black text-slate-100 tracking-tight">
+            Menu Pengaturan Terkunci
+          </h2>
+          <p className="mt-3 text-slate-300 text-sm leading-relaxed max-w-lg mx-auto">
+            Halaman pengaturan sistem (pengeditan NOP, daftar kelompok tim, manajemen personel, dan reset data) hanya dapat diakses oleh <strong className="text-amber-300">Akun Admin</strong>.
+          </p>
+
+          <div className="mt-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 text-left space-y-2 text-xs text-slate-400">
+            <div className="text-slate-200 font-bold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              Akun Aktif: {currentUser?.name || 'User Biasa'} ({currentUser?.role || 'User'})
+            </div>
+            <p>
+              Sebagai <strong>User</strong>, Anda memiliki izin penuh untuk:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-300 pl-1">
+              <li>Mengubah status standby personel: 🟢 Standby, 🟡 Ijin, 🔴 Off</li>
+              <li>Mengirim & memperbarui format jadwal ke WhatsApp</li>
+              <li>Chat langsung ke personel via WhatsApp</li>
+            </ul>
+          </div>
+
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            {onOpenAccountModal && (
+              <button
+                type="button"
+                onClick={onOpenAccountModal}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Masuk dengan Akun Admin (Ganti Akun)</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
   // NOP OPERASIONAL STATE
   const [targetScheduleKey, setTargetScheduleKey] = useState<'inner' | 'outer'>('inner');
   const currentSelectedSchedule = targetScheduleKey === 'inner' ? innerSchedule : outerSchedule;

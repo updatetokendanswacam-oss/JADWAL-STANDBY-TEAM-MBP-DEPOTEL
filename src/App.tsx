@@ -15,6 +15,7 @@ import { MBPStandbyView } from './components/MBPStandbyView';
 import { BroadcastWAView } from './components/BroadcastWAView';
 import { SettingsView } from './components/SettingsView';
 import { PersonnelModal } from './components/PersonnelModal';
+import { AccountModal } from './components/AccountModal';
 import {
   formatStandbyScheduleToWA,
   formatCombinedStandbyScheduleToWA
@@ -43,6 +44,7 @@ import {
 const STORAGE_KEY_INNER = 'mbp_schedule_inner_jaktim_v10';
 const STORAGE_KEY_OUTER = 'mbp_schedule_outer_bekasi_v10';
 const STORAGE_KEY_USERS = 'mbp_app_users_v10';
+const STORAGE_KEY_CURRENT_USER = 'mbp_current_user_v10';
 
 // Ensure group names for Inner Jaktim align with user's specification (TO JAKTIM 1 & TO JAKTIM 2)
 const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
@@ -102,6 +104,32 @@ export default function App() {
       return INITIAL_APP_USERS;
     }
   });
+
+  // Current Active User State (RBAC: Admin vs User)
+  const [currentUser, setCurrentUserState] = useState<AppUser | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
+      if (saved) return JSON.parse(saved);
+      // Default to Saddam Husen (User) so User restrictions can be directly experienced
+      return INITIAL_APP_USERS.find((u) => u.role === 'User') || INITIAL_APP_USERS[0];
+    } catch {
+      return INITIAL_APP_USERS.find((u) => u.role === 'User') || INITIAL_APP_USERS[0];
+    }
+  });
+
+  const setCurrentUser = (user: AppUser | null) => {
+    setCurrentUserState(user);
+    try {
+      if (user) {
+        localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(user));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
+      }
+    } catch {}
+  };
+
+  const isAdmin = currentUser?.role === 'Admin';
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
   const [activeView, setActiveView] = useState<ViewMode>('mbp_standby');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -340,10 +368,13 @@ export default function App() {
         onSelectView={setActiveView}
         onQuickCopy={handleQuickCopyAll}
         onResetData={handleResetData}
+        currentUser={currentUser}
+        isAdmin={isAdmin}
+        onOpenAccountModal={() => setIsAccountModalOpen(true)}
       />
 
-      {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 pb-28 sm:pb-32">
+      {/* Main View Container (Mobile-first responsive sizing) */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-2 sm:px-4 md:px-6 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-24 sm:pb-32">
         {/* VIEW 1: MAIN DASHBOARD STANDBY (DISPLAYS BOTH LISTS: INNER JAKTIM & BEKASI) */}
         {activeView === 'mbp_standby' && (
           <MBPStandbyView
@@ -354,6 +385,9 @@ export default function App() {
             onOpenAddMember={handleOpenAddMember}
             onEditMember={handleEditMember}
             onShowToast={showToast}
+            isAdmin={isAdmin}
+            currentUser={currentUser}
+            onOpenAccountModal={() => setIsAccountModalOpen(true)}
           />
         )}
 
@@ -378,6 +412,9 @@ export default function App() {
             onResetAllData={handleResetData}
             onRefreshData={handleRefreshData}
             onShowToast={showToast}
+            isAdmin={isAdmin}
+            currentUser={currentUser}
+            onOpenAccountModal={() => setIsAccountModalOpen(true)}
           />
         )}
       </main>
@@ -527,12 +564,12 @@ export default function App() {
       </footer>
 
       {/* DOCKED FIXED BOTTOM NAVIGATION BAR */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-4 py-2 shadow-2xl flex items-center justify-center">
-        <div className="max-w-md w-full flex items-center justify-around gap-2">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-2 sm:px-4 py-1.5 sm:py-2 shadow-2xl flex items-center justify-center">
+        <div className="max-w-md w-full flex items-center justify-around gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setActiveView('mbp_standby')}
-            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
+            className={`min-h-[40px] sm:min-h-[44px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
               activeView === 'mbp_standby'
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/80 ring-2 ring-emerald-500/30 font-extrabold'
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
@@ -545,7 +582,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveView('broadcast_wa')}
-            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
+            className={`min-h-[40px] sm:min-h-[44px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
               activeView === 'broadcast_wa'
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/80 ring-2 ring-emerald-500/30 font-extrabold'
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
@@ -558,7 +595,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveView('settings')}
-            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
+            className={`min-h-[40px] sm:min-h-[44px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none flex-1 active:scale-95 ${
               activeView === 'settings'
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/80 ring-2 ring-emerald-500/30 font-extrabold'
                 : 'bg-slate-900/80 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
@@ -578,6 +615,19 @@ export default function App() {
         groups={activeTargetGroups}
         editingMember={editingMember}
         onSave={handleSaveMember}
+      />
+
+      {/* Account & Role Switcher Modal (Admin vs User) */}
+      <AccountModal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        currentUser={currentUser}
+        onSelectUser={(user) => {
+          setCurrentUser(user);
+          showToast(`Beralih ke akun ${user.name} (${user.role.toUpperCase()})`);
+        }}
+        users={users}
+        onShowToast={showToast}
       />
     </div>
   );

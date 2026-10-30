@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StandbySchedule, MemberStatus, Personnel } from '../types';
+import { StandbySchedule, MemberStatus, Personnel, AppUser } from '../types';
 import { KeteranganLegend } from './KeteranganLegend';
 import { CalendarDatePickerModal } from './CalendarDatePickerModal';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
@@ -30,7 +30,11 @@ import {
   Building2,
   Layers,
   RefreshCw,
-  X
+  X,
+  ShieldAlert,
+  Info,
+  Shield,
+  Lock
 } from 'lucide-react';
 
 interface MBPStandbyViewProps {
@@ -41,6 +45,9 @@ interface MBPStandbyViewProps {
   onOpenAddMember: (scheduleId: string, groupId: string) => void;
   onEditMember: (scheduleId: string, groupId: string, member: Personnel) => void;
   onShowToast: (msg: string) => void;
+  isAdmin: boolean;
+  currentUser: AppUser | null;
+  onOpenAccountModal?: () => void;
 }
 
 interface PersonnelDeleteTarget {
@@ -57,15 +64,22 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   onUpdateOuterSchedule,
   onOpenAddMember,
   onEditMember,
-  onShowToast
+  onShowToast,
+  isAdmin,
+  currentUser,
+  onOpenAccountModal
 }) => {
   const clock = useRealtimeClock();
   const [activeTab, setActiveTab] = useState<'all' | 'inner' | 'outer'>('all');
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [deletePersonnelTarget, setDeletePersonnelTarget] = useState<PersonnelDeleteTarget | null>(null);
 
-  // Apply real-time date change across BOTH schedules automatically
+  // Apply real-time date change across BOTH schedules automatically (Admin only)
   const handleDateChange = (newDateDDMMYYYY: string) => {
+    if (!isAdmin) {
+      onShowToast('Hanya akun Admin yang dapat merubah tanggal jadwal.');
+      return;
+    }
     const newDayName = getIndonesianDayName(newDateDDMMYYYY);
 
     const updateScheduleWithDate = (sched: StandbySchedule, defaultAreaName: string) => {
@@ -140,28 +154,50 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
             <button
               type="button"
               onClick={handleSetTodayRealtime}
-              className="min-h-[42px] px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer select-none"
+              title="Sinkronkan tanggal ke hari ini real-time"
+              className="min-h-[42px] px-2.5 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer select-none"
             >
-              <RefreshCw className="w-4 h-4" />
-              <span>Set Hari Ini Live ({clock.dateStrDDMMYYYY})</span>
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+              <span>Set Hari Ini Live</span>
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                setIsCalendarModalOpen(true);
-              }}
-              className="min-h-[42px] px-3.5 py-2 bg-slate-950 border border-emerald-500/80 hover:border-emerald-400 text-emerald-300 font-mono font-bold text-xs rounded-xl transition-colors hover:bg-slate-900 flex items-center gap-2 cursor-pointer select-none"
+              onClick={() => setIsCalendarModalOpen(true)}
+              title="Buka kalender pemilih tanggal"
+              className="min-h-[42px] px-2.5 sm:px-3.5 py-2 bg-slate-950 border border-emerald-500/80 hover:border-emerald-400 text-emerald-300 font-mono font-bold text-[11px] sm:text-xs rounded-xl transition-colors hover:bg-slate-900 flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-95"
             >
-              <CalendarIcon className="w-4 h-4 text-emerald-400" />
-              <span>Atur Tanggal Kalender</span>
+              <CalendarIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Atur Kalender</span>
             </button>
           </div>
         </div>
+
+        {/* ROLE NOTICE BANNER FOR REGULAR USER */}
+        {!isAdmin && (
+          <div className="bg-amber-950/30 border border-amber-500/40 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs animate-fadeIn">
+            <div className="flex items-center gap-2.5 text-amber-300">
+              <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-amber-400" />
+              <div className="leading-relaxed text-[11px] sm:text-xs">
+                <span className="font-bold text-amber-200">Mode Akun User ({currentUser?.name || 'Anggota'}): </span>
+                <span>Anda memiliki akses untuk merubah status personel, mengatur kalender & bulk status, edit nama NOP & kelompok tim, serta tambah, edit, & hapus personel. Pengaturan akun & reset sistem hanya untuk Admin.</span>
+              </div>
+            </div>
+            {onOpenAccountModal && (
+              <button
+                type="button"
+                onClick={onOpenAccountModal}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg shrink-0 cursor-pointer transition-colors shadow-md text-[11px] active:scale-95 whitespace-nowrap self-end sm:self-auto"
+              >
+                Ganti Akun
+              </button>
+            )}
+          </div>
+        )}
 
         {/* LIST SWITCHER / FILTER TABS */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
@@ -227,6 +263,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
           }
           onOpenCalendarModal={() => setIsCalendarModalOpen(true)}
           onShowToast={onShowToast}
+          isAdmin={isAdmin}
         />
       )}
 
@@ -247,18 +284,21 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
           }
           onOpenCalendarModal={() => setIsCalendarModalOpen(true)}
           onShowToast={onShowToast}
+          isAdmin={isAdmin}
         />
       )}
 
       <KeteranganLegend />
 
-      {/* Visual Calendar Date Picker Modal */}
-      <CalendarDatePickerModal
-        isOpen={isCalendarModalOpen}
-        onClose={() => setIsCalendarModalOpen(false)}
-        currentDateDDMMYYYY={innerSchedule.date || clock.dateStrDDMMYYYY}
-        onSelectDate={handleDateChange}
-      />
+      {/* Visual Calendar Date Picker Modal (Admin only) */}
+      {isAdmin && (
+        <CalendarDatePickerModal
+          isOpen={isCalendarModalOpen}
+          onClose={() => setIsCalendarModalOpen(false)}
+          currentDateDDMMYYYY={innerSchedule.date || clock.dateStrDDMMYYYY}
+          onSelectDate={handleDateChange}
+        />
+      )}
 
       {/* Personnel Delete Modal */}
       <ConfirmDeleteModal
@@ -284,6 +324,7 @@ interface SingleScheduleSectionProps {
   onPromptDelete: (groupId: string, memberId: string, memberName: string) => void;
   onOpenCalendarModal: () => void;
   onShowToast: (msg: string) => void;
+  isAdmin: boolean;
 }
 
 const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
@@ -296,7 +337,8 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   onEditMember,
   onPromptDelete,
   onOpenCalendarModal,
-  onShowToast
+  onShowToast,
+  isAdmin
 }) => {
   const [copied, setCopied] = useState(false);
   const [filterGroup, setFilterGroup] = useState<string>('all');
@@ -311,6 +353,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   }, [schedule.headerTitle, headingTitle]);
 
   const handleSaveHeading = () => {
+    if (!isAdmin) return;
     if (!tempHeading.trim()) return;
     const newHeading = tempHeading.trim();
     onUpdateSchedule({
@@ -321,11 +364,11 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     onShowToast(`Judul list berhasil disimpan: "${newHeading}"`);
   };
 
-  // State for editing NOP name (e.g. Semua Kelompok NOP)
+  // State for editing NOP name (Admin only)
   const [isEditingNop, setIsEditingNop] = useState(false);
   const [tempNopName, setTempNopName] = useState(schedule.nopName);
 
-  // State for editing group name
+  // State for editing group name (Admin only)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [tempGroupName, setTempGroupName] = useState('');
 
@@ -368,6 +411,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   const currentDayName = schedule.dayName || getIndonesianDayName(currentDateStr);
 
   const handleAddEnterToTitle = () => {
+    if (!isAdmin) return;
     onUpdateSchedule({
       ...schedule,
       title: `${schedule.title}\n`,
@@ -378,6 +422,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   };
 
   const handleSaveCustomTitle = (newTitleValue: string) => {
+    if (!isAdmin) return;
     onUpdateSchedule({
       ...schedule,
       title: newTitleValue,
@@ -387,6 +432,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     onShowToast('Judul Laporan disimpan secara permanen!');
   };
 
+  // User and Admin can change personnel status
   const handleSingleClickStatusChange = (
     groupId: string,
     memberId: string,
@@ -409,7 +455,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
       ijin_sakit: 'IJIN/SAKIT 🟡',
       off: 'OFF 🔴'
     };
-    onShowToast(`Status ${memberId} diperbarui ke ${statusNames[newStatus]}`);
+    onShowToast(`Status diperbarui ke ${statusNames[newStatus]}`);
   };
 
   const handleCycleStatus = (groupId: string, memberId: string, currentStatus: MemberStatus) => {
@@ -421,6 +467,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     handleSingleClickStatusChange(groupId, memberId, cycleMap[currentStatus]);
   };
 
+  // User and Admin can copy WA report
   const handleCopyWA = () => {
     const text = formatStandbyScheduleToWA(schedule);
     navigator.clipboard.writeText(text);
@@ -429,6 +476,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
+  // User and Admin can share WA report
   const handleShareWA = () => {
     const text = formatStandbyScheduleToWA(schedule);
     const encoded = encodeURIComponent(text);
@@ -460,21 +508,21 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
     }));
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 shadow-2xl space-y-4 sm:space-y-6">
       {/* HEADER TIER BADGE */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl overflow-hidden border border-amber-500/80 p-0.5 bg-slate-950 shadow-lg shrink-0">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-800">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/80 p-0.5 bg-slate-950 shadow-lg shrink-0">
             <img
               src="/logo-emblem.png"
               alt="Logo Emblem"
-              className="w-full h-full object-cover rounded-xl"
+              className="w-full h-full object-cover rounded-lg sm:rounded-xl"
             />
           </div>
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
               <span
-                className={`px-3 py-0.5 rounded-full text-[11px] font-black tracking-wider uppercase border ${badgeBg}`}
+                className={`px-2.5 sm:px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-wider uppercase border ${badgeBg}`}
               >
                 {listTitleLabel}
               </span>
@@ -485,13 +533,14 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                   setIsEditingNop(true);
                 }}
                 title="Klik untuk ubah nama NOP ini"
-                className="text-xs text-amber-400 font-mono font-bold hover:underline flex items-center gap-1 cursor-pointer group"
+                className="text-xs text-amber-400 font-mono font-bold hover:underline flex items-center gap-1 cursor-pointer group active:scale-95"
               >
                 <span>({schedule.nopName})</span>
-                <Edit2 className="w-3 h-3 opacity-70 group-hover:opacity-100" />
+                <Edit2 className="w-3 h-3 opacity-70 group-hover:opacity-100 text-emerald-400" />
               </button>
             </div>
-            {isEditingHeading ? (
+
+            {isAdmin && isEditingHeading ? (
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">
                 <input
                   type="text"
@@ -536,47 +585,49 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                   {currentHeading}
                 </h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTempHeading(currentHeading);
-                    setIsEditingHeading(true);
-                  }}
-                  title="Ubah Judul List Ini"
-                  className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-800/90 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5 group select-none"
-                >
-                  <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white transition-colors" />
-                  <span className="text-[11px] font-bold text-slate-300 group-hover:text-white">Edit Judul</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempHeading(currentHeading);
+                      setIsEditingHeading(true);
+                    }}
+                    title="Ubah Judul List Ini (Khusus Admin)"
+                    className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-800/90 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5 group select-none"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white transition-colors" />
+                    <span className="text-[11px] font-bold text-slate-300 group-hover:text-white">Edit Judul</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* METRICS STATS MINI BAR */}
-        <div className="flex items-center gap-2 overflow-x-auto p-1 bg-slate-950 border border-slate-800 rounded-2xl shrink-0">
-          <div className="px-3 py-1.5 text-center">
-            <span className="text-[10px] text-slate-400 uppercase font-bold block">Total</span>
-            <span className="text-sm font-mono font-extrabold text-white">{totalPersonel}</span>
+        {/* METRICS STATS MINI BAR (MOBILE RESPONSIVE GRID) */}
+        <div className="grid grid-cols-4 gap-1 sm:flex sm:items-center sm:gap-2 p-1.5 sm:p-1 bg-slate-950 border border-slate-800 rounded-2xl shrink-0 w-full md:w-auto">
+          <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-center">
+            <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-bold block">Total</span>
+            <span className="text-xs sm:text-sm font-mono font-extrabold text-white">{totalPersonel}</span>
           </div>
-          <div className="px-3 py-1.5 text-center border-l border-slate-800">
-            <span className="text-[10px] text-emerald-400 uppercase font-bold block">🟢 Standby</span>
-            <span className="text-sm font-mono font-extrabold text-emerald-300">{totalStandby}</span>
+          <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-center border-l border-slate-800">
+            <span className="text-[9px] sm:text-[10px] text-emerald-400 uppercase font-bold block">🟢 Standby</span>
+            <span className="text-xs sm:text-sm font-mono font-extrabold text-emerald-300">{totalStandby}</span>
           </div>
-          <div className="px-3 py-1.5 text-center border-l border-slate-800">
-            <span className="text-[10px] text-amber-400 uppercase font-bold block">🟡 Ijin</span>
-            <span className="text-sm font-mono font-extrabold text-amber-300">{totalIjinSakit}</span>
+          <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-center border-l border-slate-800">
+            <span className="text-[9px] sm:text-[10px] text-amber-400 uppercase font-bold block">🟡 Ijin</span>
+            <span className="text-xs sm:text-sm font-mono font-extrabold text-amber-300">{totalIjinSakit}</span>
           </div>
-          <div className="px-3 py-1.5 text-center border-l border-slate-800">
-            <span className="text-[10px] text-red-400 uppercase font-bold block">🔴 Off</span>
-            <span className="text-sm font-mono font-extrabold text-red-300">{totalOff}</span>
+          <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-center border-l border-slate-800">
+            <span className="text-[9px] sm:text-[10px] text-red-400 uppercase font-bold block">🔴 Off</span>
+            <span className="text-xs sm:text-sm font-mono font-extrabold text-red-300">{totalOff}</span>
           </div>
         </div>
       </div>
 
       {/* EDITABLE FORMAT WA TITLE BAR & ENTER SUPPORT */}
-      <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="bg-slate-950 border border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-2.5 sm:space-y-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-300">Format Judul WA:</span>
             {schedule.isCustomTitle && (
@@ -588,19 +639,23 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleAddEnterToTitle}
-              className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none cursor-pointer"
-            >
-              <CornerDownLeft className="w-3.5 h-3.5" />
-              <span>+ Enter</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleAddEnterToTitle}
+                title="Tambah baris baru (Enter)"
+                className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none cursor-pointer"
+              >
+                <CornerDownLeft className="w-3.5 h-3.5" />
+                <span>+ Enter</span>
+              </button>
+            )}
 
             <button
               type="button"
               onClick={onOpenCalendarModal}
-              className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none cursor-pointer"
+              title="Pilih tanggal jadwal via kalender"
+              className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-colors select-none cursor-pointer active:scale-95"
             >
               <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
               <span>{currentDayName.toUpperCase()}, {currentDateStr}</span>
@@ -608,7 +663,7 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
           </div>
         </div>
 
-        {isEditingTitle ? (
+        {isAdmin && isEditingTitle ? (
           <div className="flex items-center gap-2">
             <textarea
               rows={2}
@@ -629,35 +684,37 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
-            <div className="text-xs font-mono font-extrabold text-slate-200 bg-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-800 flex-1 whitespace-pre-wrap leading-relaxed">
+            <div className="text-xs font-mono font-extrabold text-slate-200 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 flex-1 whitespace-pre-wrap leading-relaxed">
               {schedule.title}
             </div>
-            <button
-              type="button"
-              onClick={() => setIsEditingTitle(true)}
-              className="min-h-[40px] px-3 py-2 text-xs font-bold text-emerald-400 hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Edit</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsEditingTitle(true)}
+                className="min-h-[36px] px-2.5 py-1.5 text-xs font-bold text-emerald-400 hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+            )}
           </div>
         )}
 
-        {/* Action Buttons: Copy WA & Send WA */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
+        {/* Action Buttons: Copy WA & Send WA (Available for ALL users, full width on mobile) */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-slate-800/80">
           <button
             type="button"
             onClick={handleCopyWA}
-            className="min-h-[40px] px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer select-none"
+            className="min-h-[42px] px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none active:scale-95"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-emerald-400" />}
-            <span>{copied ? 'Tersalin!' : `Salin ${schedule.nopName}`}</span>
+            <span>{copied ? 'Tersalin!' : `Salin Format ${schedule.nopName}`}</span>
           </button>
 
           <button
             type="button"
             onClick={handleShareWA}
-            className="min-h-[40px] px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center gap-1.5 transition-colors cursor-pointer select-none"
+            className="min-h-[42px] px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none active:scale-95"
           >
             <MessageCircle className="w-4 h-4" />
             <span>Kirim Laporan ke WhatsApp</span>
@@ -715,41 +772,47 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
             >
               <Edit2 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
               <span className="text-xs font-bold hidden sm:inline">
-                {filterGroup === 'all' ? 'Edit Judul NOP' : 'Edit Kelompok'}
+                {filterGroup === 'all' ? 'Edit NOP' : 'Edit Kelompok'}
               </span>
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-[11px] font-bold text-slate-400 uppercase shrink-0">
+        {/* Bulk Status Change Buttons (Available for ALL users, mobile responsive) */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+          <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase shrink-0">
             Set Semua ({schedule.nopName}):
           </span>
-          <button
-            type="button"
-            onClick={() => handleBulkSetStatus('standby')}
-            className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/50 text-emerald-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer select-none"
-          >
-            🟢 Standby
-          </button>
-          <button
-            type="button"
-            onClick={() => handleBulkSetStatus('off')}
-            className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-red-950/80 hover:bg-red-900 border border-red-700/50 text-red-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer select-none"
-          >
-            🔴 Off
-          </button>
-          <button
-            type="button"
-            onClick={() => handleBulkSetStatus('ijin_sakit')}
-            className="min-h-[36px] px-3 py-1.5 text-xs font-bold bg-amber-950/80 hover:bg-amber-900 border border-amber-700/50 text-amber-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer select-none"
-          >
-            🟡 Ijin/Sakit
-          </button>
+          <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:flex sm:items-center">
+            <button
+              type="button"
+              onClick={() => handleBulkSetStatus('standby')}
+              className="min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs font-bold bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/50 text-emerald-300 rounded-xl transition-colors whitespace-nowrap cursor-pointer select-none active:scale-95 flex items-center justify-center gap-1"
+            >
+              <span>🟢</span>
+              <span>Standby</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkSetStatus('off')}
+              className="min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs font-bold bg-red-950/80 hover:bg-red-900 border border-red-700/50 text-red-300 rounded-xl transition-colors whitespace-nowrap cursor-pointer select-none active:scale-95 flex items-center justify-center gap-1"
+            >
+              <span>🔴</span>
+              <span>Off</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkSetStatus('ijin_sakit')}
+              className="min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs font-bold bg-amber-950/80 hover:bg-amber-900 border border-amber-700/50 text-amber-300 rounded-xl transition-colors whitespace-nowrap cursor-pointer select-none active:scale-95 flex items-center justify-center gap-1"
+            >
+              <span>🟡</span>
+              <span>Ijin</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* INLINE EDITOR FOR NOP NAME (SEPERTI DI GAMBAR DROPDOWN) */}
+      {/* INLINE EDITOR FOR NOP NAME */}
       {isEditingNop && (
         <div className="p-3 bg-slate-950 border-2 border-emerald-500/80 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xl">
           <div className="flex items-center gap-2 flex-1">
@@ -832,17 +895,17 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
       )}
 
       {/* GROUPS AND PERSONNEL CARDS */}
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         {filteredGroups.map((group) => (
           <div
             key={group.id}
             className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-lg"
           >
             {/* Group Header */}
-            <div className="bg-slate-900/90 px-5 py-3 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-                <h3 className="text-sm sm:text-base font-black text-slate-100 font-mono tracking-wider uppercase">
+            <div className="bg-slate-900/90 px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-slate-800 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <h3 className="text-xs sm:text-base font-black text-slate-100 font-mono tracking-wider uppercase">
                   {group.groupName} :
                 </h3>
                 <button
@@ -857,18 +920,18 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-xs text-slate-400 font-mono bg-slate-950 px-2.5 py-0.5 rounded-full border border-slate-800">
-                  {group.members.length} Personel
+                <span className="text-[10px] sm:text-xs text-slate-400 font-mono bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800 shrink-0">
+                  {group.members.length}
                 </span>
               </div>
 
               <button
                 type="button"
                 onClick={() => onOpenAddMember(group.id)}
-                className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl transition-colors cursor-pointer select-none"
+                className="min-h-[34px] flex items-center gap-1 px-2.5 sm:px-3 py-1 text-xs font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl transition-colors cursor-pointer select-none active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                <span>+ Personel</span>
+                <span className="text-[11px] sm:text-xs">+ Personel</span>
               </button>
             </div>
 
@@ -894,32 +957,33 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                       className="p-4 hover:bg-slate-900/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-xs font-bold font-mono text-slate-500 w-5 shrink-0">
+                        <span className="text-xs font-bold font-mono text-slate-500 w-4 sm:w-5 shrink-0">
                           {index + 1}.
                         </span>
 
+                        {/* Status Emoji (clickable to cycle status for both User & Admin) */}
                         <button
                           type="button"
                           onClick={() => handleCycleStatus(group.id, member.id, member.status)}
                           title="Klik untuk ganti status (STANDBY -> OFF -> IJIN)"
-                          className="text-2xl shrink-0 p-1.5 rounded-xl hover:bg-slate-800 transition-transform active:scale-110 select-none min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+                          className="text-xl sm:text-2xl shrink-0 p-1 sm:p-1.5 rounded-xl hover:bg-slate-800 transition-transform active:scale-110 select-none min-h-[38px] min-w-[38px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center cursor-pointer"
                         >
                           {statusEmoji}
                         </button>
 
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-100 text-sm sm:text-base font-sans tracking-tight">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <span className="font-bold text-slate-100 text-xs sm:text-base font-sans tracking-tight">
                               {member.name}
                             </span>
-                            <span className="text-slate-500 text-xs font-mono">☆</span>
+                            <span className="text-slate-500 text-xs font-mono hidden sm:inline">☆</span>
 
                             <a
                               href={`tel:${member.phone}`}
-                              className="text-slate-300 hover:underline font-mono text-xs flex items-center gap-1 py-0.5"
+                              className="text-slate-300 hover:underline font-mono text-[11px] sm:text-xs flex items-center gap-1 py-0.5"
                             >
-                              <Phone className="w-3.5 h-3.5 text-slate-400" />
-                              {member.phone}
+                              <Phone className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+                              <span>{member.phone}</span>
                             </a>
 
                             <a
@@ -927,17 +991,17 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                               target="_blank"
                               rel="noreferrer"
                               title={`Chat WA dengan ${member.name}`}
-                              className="px-2.5 py-0.5 bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/80 text-emerald-400 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors min-h-[28px]"
+                              className="px-2 py-0.5 bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/80 text-emerald-400 rounded-lg text-[10px] sm:text-xs font-semibold flex items-center gap-1 transition-colors min-h-[26px] ml-auto sm:ml-0"
                             >
-                              <MessageCircle className="w-3.5 h-3.5" />
+                              <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                               <span>Chat WA</span>
                             </a>
                           </div>
 
-                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+                          <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
                             <span>Status:</span>
                             <span
-                              className={`font-semibold capitalize px-2 py-0.5 rounded text-[10px] ${
+                              className={`font-semibold capitalize px-1.5 py-0.5 rounded text-[10px] ${
                                 member.status === 'standby'
                                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50'
                                   : member.status === 'off'
@@ -951,67 +1015,70 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
                         </div>
                       </div>
 
-                      {/* 1-CLICK STATUS SWITCHER AND ACTIONS */}
-                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                        <button
-                          type="button"
-                          onClick={() => handleSingleClickStatusChange(group.id, member.id, 'off')}
-                          className={`min-h-[42px] px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border cursor-pointer select-none ${
-                            member.status === 'off'
-                              ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-950/50 ring-2 ring-red-500/30'
-                              : 'bg-slate-900/80 hover:bg-red-950/50 text-slate-300 border-slate-800'
-                          }`}
-                        >
-                          <span>🔴</span>
-                          <span>OFF</span>
-                        </button>
+                      {/* 1-CLICK STATUS SWITCHER & ACTIONS (RESPONSIVE & MOBILE TOUCH-FRIENDLY) */}
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0 justify-between sm:justify-end pt-2 sm:pt-0 border-t border-slate-800/50 sm:border-t-0">
+                        <div className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:gap-1.5 flex-1 sm:flex-initial">
+                          <button
+                            type="button"
+                            onClick={() => handleSingleClickStatusChange(group.id, member.id, 'off')}
+                            className={`min-h-[38px] px-2 sm:px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border cursor-pointer select-none active:scale-95 ${
+                              member.status === 'off'
+                                ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-950/50 ring-2 ring-red-500/30'
+                                : 'bg-slate-900/80 hover:bg-red-950/50 text-slate-300 border-slate-800'
+                            }`}
+                          >
+                            <span>🔴</span>
+                            <span>OFF</span>
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleSingleClickStatusChange(group.id, member.id, 'ijin_sakit')
-                          }
-                          className={`min-h-[42px] px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border cursor-pointer select-none ${
-                            member.status === 'ijin_sakit'
-                              ? 'bg-amber-600 text-white border-amber-500 shadow-md shadow-amber-950/50 ring-2 ring-amber-500/30'
-                              : 'bg-slate-900/80 hover:bg-amber-950/50 text-slate-300 border-slate-800'
-                          }`}
-                        >
-                          <span>🟡</span>
-                          <span>IJIN</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSingleClickStatusChange(group.id, member.id, 'ijin_sakit')
+                            }
+                            className={`min-h-[38px] px-2 sm:px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border cursor-pointer select-none active:scale-95 ${
+                              member.status === 'ijin_sakit'
+                                ? 'bg-amber-600 text-white border-amber-500 shadow-md shadow-amber-950/50 ring-2 ring-amber-500/30'
+                                : 'bg-slate-900/80 hover:bg-amber-950/50 text-slate-300 border-slate-800'
+                            }`}
+                          >
+                            <span>🟡</span>
+                            <span>IJIN</span>
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleSingleClickStatusChange(group.id, member.id, 'standby')
-                          }
-                          className={`min-h-[42px] px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1 border cursor-pointer select-none ${
-                            member.status === 'standby'
-                              ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-950/50 ring-2 ring-emerald-500/30'
-                              : 'bg-slate-900/80 hover:bg-emerald-950/50 text-slate-300 border-slate-800'
-                          }`}
-                        >
-                          <span>🟢</span>
-                          <span>STANDBY</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSingleClickStatusChange(group.id, member.id, 'standby')
+                            }
+                            className={`min-h-[38px] px-2 sm:px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border cursor-pointer select-none active:scale-95 ${
+                              member.status === 'standby'
+                                ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-950/50 ring-2 ring-emerald-500/30'
+                                : 'bg-slate-900/80 hover:bg-emerald-950/50 text-slate-300 border-slate-800'
+                            }`}
+                          >
+                            <span>🟢</span>
+                            <span>STANDBY</span>
+                          </button>
+                        </div>
 
-                        <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-800">
+                        {/* Edit & Delete Personel: AVAILABLE FOR USER & ADMIN */}
+                        <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-800 shrink-0">
                           <button
                             type="button"
                             onClick={() => onEditMember(group.id, member)}
                             title="Edit Data Personel"
-                            className="min-h-[42px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                            className="min-h-[38px] min-w-[34px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer active:scale-95"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
                           </button>
                           <button
                             type="button"
                             onClick={() => onPromptDelete(group.id, member.id, member.name)}
                             title="Hapus Personel"
-                            className="min-h-[42px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                            className="min-h-[38px] min-w-[34px] flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer active:scale-95"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
                           </button>
                         </div>
                       </div>
