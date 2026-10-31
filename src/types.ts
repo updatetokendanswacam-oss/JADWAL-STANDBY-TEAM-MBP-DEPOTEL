@@ -22,10 +22,11 @@ export interface TeamGroup {
 
 export interface StandbySchedule {
   id: string;
-  title: string; // e.g. "JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026"
+  title: string; // e.g. "JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM KAMIS, 29-10-2026"
   headerTitle?: string; // e.g. "JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM"
   subBadgeTitle?: string; // e.g. "DEPOTEL INNER JAKTIM" or "DEPOTEL BEKASI"
   isCustomTitle?: boolean; // True when user manually edits title so date picker preserves custom title format
+  titleFormatStyle?: 'day_comma_date' | 'day_space_date' | 'date_only';
   nopName: string; // e.g. "NOP SOUTHERN"
   date: string; // "29-10-2026"
   dayName?: string; // "Kamis", "Jumat", "Sabtu", etc.

@@ -8,7 +8,9 @@ import { useRealtimeClock } from '../hooks/useRealtimeClock';
 import {
   formatStandbyScheduleToWA,
   getStatusEmoji,
-  getPersonelWALink
+  getPersonelWALink,
+  buildAutoWATitle,
+  updateTitleDateAndDay
 } from '../utils/whatsappFormatter';
 import {
   formatIndonesianDateFull,
@@ -85,24 +87,27 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     const newDayName = getIndonesianDayName(newDateDDMMYYYY);
 
     const updateScheduleWithDate = (sched: StandbySchedule, defaultAreaName: string) => {
-      let newTitle = sched.title || '';
-      const oldDate = sched.date;
+      const updatedSchedForTitle: StandbySchedule = {
+        ...sched,
+        date: newDateDDMMYYYY,
+        dayName: newDayName
+      };
 
-      // 1. Replace date in title
-      const datePattern = /\d{1,2}-\d{1,2}-\d{4}/;
-      if (oldDate && newTitle.includes(oldDate)) {
-        newTitle = newTitle.replace(oldDate, newDateDDMMYYYY);
-      } else if (datePattern.test(newTitle)) {
-        newTitle = newTitle.replace(datePattern, newDateDDMMYYYY);
+      let newTitle: string;
+      if (sched.isCustomTitle && sched.title) {
+        // If user customized the title, update only the day and date while strictly preserving all custom words
+        newTitle = updateTitleDateAndDay(sched.title, newDayName, newDateDDMMYYYY, defaultAreaName);
       } else {
-        newTitle = `JADWAL STANDBY TEAM MBP *DEPOTEL* ${defaultAreaName} ${newDateDDMMYYYY}`;
+        newTitle = buildAutoWATitle(
+          updatedSchedForTitle,
+          sched.titleFormatStyle || 'day_comma_date'
+        );
       }
 
       const updatedSched: StandbySchedule = {
-        ...sched,
-        date: newDateDDMMYYYY,
-        dayName: newDayName,
-        title: newTitle
+        ...updatedSchedForTitle,
+        title: newTitle,
+        isCustomTitle: sched.isCustomTitle ?? false
       };
 
       // Automatically recalculate work & holiday statuses based on shift cycle!
@@ -112,7 +117,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
     onUpdateInnerSchedule(updateScheduleWithDate(innerSchedule, 'INNER JAKTIM'));
     onUpdateOuterSchedule(updateScheduleWithDate(outerSchedule, 'BEKASI'));
 
-    onShowToast(`Tanggal berhasil diperbarui ke: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}. Pola kerja & libur otomatis disesuaikan! 🔄`);
+    onShowToast(`Format Judul WA & Jadwal otomatis mengikuti kalender: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}! 🔄`);
   };
 
   const handleSetTodayRealtime = () => {
@@ -480,24 +485,58 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
   const currentDateStr = schedule.date || '29-10-2026';
   const currentDayName = schedule.dayName || getIndonesianDayName(currentDateStr);
 
-  const handleAddEnterToTitle = () => {
+  // Local state for editing title cleanly before committing to permanent storage
+  const [tempTitle, setTempTitle] = useState(schedule.title || '');
+
+  useEffect(() => {
+    if (!isEditingTitle) {
+      setTempTitle(schedule.title || '');
+    }
+  }, [schedule.title, isEditingTitle]);
+
+  const handleStartEditTitle = () => {
+    setTempTitle(schedule.title || '');
+    setIsEditingTitle(true);
+  };
+
+  const handleCancelEditTitle = () => {
+    setTempTitle(schedule.title || '');
+    setIsEditingTitle(false);
+  };
+
+  const handleResetToAutoCalendar = () => {
+    const autoTitle = buildAutoWATitle({
+      ...schedule,
+      date: currentDateStr,
+      dayName: currentDayName
+    }, 'day_comma_date');
+
+    setTempTitle(autoTitle);
     onUpdateSchedule({
       ...schedule,
-      title: `${schedule.title}\n`,
-      isCustomTitle: true
+      title: autoTitle,
+      isCustomTitle: false
     });
+    setIsEditingTitle(false);
+    onShowToast(`Format Judul WA disinkronkan otomatis ke kalender: ${currentDayName.toUpperCase()}, ${currentDateStr} ⚡`);
+  };
+
+  const handleAddEnterToTitle = () => {
+    setTempTitle((prev) => `${prev}\n`);
     setIsEditingTitle(true);
     onShowToast('Baris baru (Enter) ditambahkan!');
   };
 
-  const handleSaveCustomTitle = (newTitleValue: string) => {
+  const handleSaveCustomTitle = () => {
+    const finalVal = tempTitle.trim();
+    if (!finalVal) return;
     onUpdateSchedule({
       ...schedule,
-      title: newTitleValue,
+      title: finalVal,
       isCustomTitle: true
     });
     setIsEditingTitle(false);
-    onShowToast('Judul Laporan disimpan secara permanen!');
+    onShowToast('Format Judul WA berhasil disimpan permanen! 💾');
   };
 
   // User and Admin can change personnel status
@@ -734,25 +773,28 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
       </div>
 
       {/* EDITABLE FORMAT WA TITLE BAR & ENTER SUPPORT */}
-      <div className="bg-slate-950 border border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-2.5 sm:space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-300">Format Judul WA:</span>
+      <div className="bg-slate-950 border border-slate-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-inner">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-200">Format Judul WA:</span>
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-600/70 font-mono font-bold flex items-center gap-1 shadow-sm">
+              <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
+              <span>OTOMATIS IKUTI KALENDER ⚡</span>
+            </span>
             {schedule.isCustomTitle && (
-              <span className="text-[10px] px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded font-mono font-bold flex items-center gap-1">
-                <CheckCheck className="w-3 h-3" />
-                Permanen
+              <span className="text-[10px] px-2 py-0.5 bg-amber-950/80 text-amber-300 border border-amber-800/80 rounded font-mono font-bold flex items-center gap-1">
+                Kustom
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isAdmin && (
               <button
                 type="button"
                 onClick={handleAddEnterToTitle}
                 title="Tambah baris baru (Enter)"
-                className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none cursor-pointer"
+                className="min-h-[36px] px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1 transition-colors select-none cursor-pointer active:scale-95"
               >
                 <CornerDownLeft className="w-3.5 h-3.5" />
                 <span>+ Enter</span>
@@ -761,48 +803,83 @@ const SingleScheduleSection: React.FC<SingleScheduleSectionProps> = ({
 
             <button
               type="button"
+              onClick={handleResetToAutoCalendar}
+              title="Sinkronkan format judul otomatis mengikuti hari dan tanggal kalender sekarang"
+              className="min-h-[36px] px-2.5 sm:px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl text-xs font-bold border border-emerald-600/60 flex items-center gap-1.5 transition-colors select-none cursor-pointer active:scale-95 shadow-sm"
+            >
+              <RefreshCw className="w-3 h-3 text-emerald-400" />
+              <span>Sync Kalender</span>
+            </button>
+
+            <button
+              type="button"
               onClick={onOpenCalendarModal}
-              title="Pilih tanggal jadwal via kalender"
+              title="Pilih tanggal jadwal via kalender di atas"
               className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-colors select-none cursor-pointer active:scale-95"
             >
               <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{currentDayName.toUpperCase()}, {currentDateStr}</span>
+              <span className="font-mono font-black">{currentDayName.toUpperCase()}, {currentDateStr}</span>
             </button>
           </div>
         </div>
 
-        {isAdmin && isEditingTitle ? (
-          <div className="flex items-center gap-2">
-            <textarea
-              rows={2}
-              value={schedule.title}
-              onChange={(e) =>
-                onUpdateSchedule({ ...schedule, title: e.target.value, isCustomTitle: true })
-              }
-              className="px-3.5 py-2.5 bg-slate-900 border border-emerald-500 rounded-xl text-xs font-mono text-emerald-300 flex-1 focus:outline-none resize-y"
-            />
-            <button
-              type="button"
-              onClick={() => handleSaveCustomTitle(schedule.title)}
-              className="min-h-[42px] px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shrink-0 flex items-center gap-1 cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              <span>Simpan</span>
-            </button>
+        {isEditingTitle ? (
+          <div className="space-y-2.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5">
+              <textarea
+                rows={3}
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                placeholder="Tuliskan format judul WA di sini..."
+                className="px-3.5 py-2.5 bg-slate-900 border-2 border-emerald-500 rounded-xl text-xs sm:text-sm font-mono font-bold text-emerald-300 flex-1 focus:outline-none resize-y leading-relaxed shadow-inner"
+              />
+              <div className="flex sm:flex-col gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleSaveCustomTitle}
+                  className="min-h-[40px] px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-lg shadow-emerald-950/60"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Permanen</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEditTitle}
+                  className="min-h-[40px] px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Batal</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px] text-slate-400">
+              <span className="text-emerald-300 font-medium">
+                💾 Judul yang Anda simpan akan <strong>tersimpan permanen</strong> dan tidak akan kembali ke semula meski di-refresh atau dimuat ulang.
+              </span>
+              <button
+                type="button"
+                onClick={handleResetToAutoCalendar}
+                className="text-amber-400 hover:text-amber-300 hover:underline font-bold text-left sm:text-right cursor-pointer"
+              >
+                Kembalikan ke Format Kalender Otomatis
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs font-mono font-extrabold text-slate-200 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800 flex-1 whitespace-pre-wrap leading-relaxed">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-900/90 px-3.5 py-2.5 rounded-xl border border-slate-800">
+            <div className="text-xs sm:text-sm font-mono font-black text-slate-100 flex-1 whitespace-pre-wrap leading-relaxed tracking-wide">
               {schedule.title}
             </div>
-            <button
-              type="button"
-              onClick={() => setIsEditingTitle(true)}
-              className="min-h-[36px] px-2.5 py-1.5 text-xs font-bold text-emerald-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95"
-            >
-              <Edit2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Edit Format</span>
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={handleStartEditTitle}
+                className="min-h-[36px] px-3.5 py-1.5 text-xs font-bold text-emerald-300 hover:text-white bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 rounded-xl transition-all shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit Format</span>
+              </button>
+            </div>
           </div>
         )}
 

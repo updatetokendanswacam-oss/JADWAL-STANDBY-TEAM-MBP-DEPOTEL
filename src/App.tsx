@@ -18,8 +18,10 @@ import { PersonnelModal } from './components/PersonnelModal';
 import { AccountModal } from './components/AccountModal';
 import {
   formatStandbyScheduleToWA,
-  formatCombinedStandbyScheduleToWA
+  formatCombinedStandbyScheduleToWA,
+  buildAutoWATitle
 } from './utils/whatsappFormatter';
+import { getIndonesianDayName } from './utils/dateUtils';
 import { applyAutoShiftToSchedule } from './utils/shiftScheduleCalculator';
 import {
   CheckCircle2,
@@ -63,8 +65,24 @@ const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
     }
     return grp;
   });
+
+  const dateStr = sched.date || '29-10-2026';
+  const dayName = sched.dayName || getIndonesianDayName(dateStr);
+  const autoTitle = buildAutoWATitle({
+    ...sched,
+    date: dateStr,
+    dayName: dayName
+  }, sched.titleFormatStyle || 'day_comma_date');
+
+  // Strictly preserve saved title so user changes remain permanent even across page refreshes
+  const finalTitle = sched.title && sched.title.trim().length > 0 ? sched.title : autoTitle;
+
   const normalized: StandbySchedule = {
     ...sched,
+    date: dateStr,
+    dayName: dayName,
+    title: finalTitle,
+    isCustomTitle: sched.isCustomTitle ?? (sched.title ? true : false),
     headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM',
     subBadgeTitle: sched.subBadgeTitle || 'DEPOTEL INNER JAKTIM',
     nopName: nop,
@@ -74,8 +92,23 @@ const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
 };
 
 const normalizeOuterSchedule = (sched: StandbySchedule): StandbySchedule => {
+  const dateStr = sched.date || '28-10-2026';
+  const dayName = sched.dayName || getIndonesianDayName(dateStr);
+  const autoTitle = buildAutoWATitle({
+    ...sched,
+    date: dateStr,
+    dayName: dayName
+  }, sched.titleFormatStyle || 'day_comma_date');
+
+  // Strictly preserve saved title so user changes remain permanent even across page refreshes
+  const finalTitle = sched.title && sched.title.trim().length > 0 ? sched.title : autoTitle;
+
   const normalized: StandbySchedule = {
     ...sched,
+    date: dateStr,
+    dayName: dayName,
+    title: finalTitle,
+    isCustomTitle: sched.isCustomTitle ?? (sched.title ? true : false),
     headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL BEKASI',
     subBadgeTitle: sched.subBadgeTitle || 'DEPOTEL BEKASI',
     nopName: sched.nopName || 'NOP BEKASI'

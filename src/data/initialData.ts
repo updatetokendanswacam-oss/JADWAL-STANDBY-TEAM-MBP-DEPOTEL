@@ -2,8 +2,10 @@ import { StandbySchedule, AppUser } from '../types';
 
 export const INITIAL_SCHEDULE_INNER_JAKTIM: StandbySchedule = {
   id: 'mbp-inner-jaktim',
-  title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM 29-10-2026',
+  title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* INNER JAKTIM KAMIS, 29-10-2026',
   headerTitle: 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM',
+  subBadgeTitle: 'DEPOTEL INNER JAKTIM',
+  titleFormatStyle: 'day_comma_date',
   nopName: 'NOP SOUTHERN',
   date: '29-10-2026',
   dayName: 'Kamis',
@@ -61,8 +63,10 @@ export const INITIAL_SCHEDULE_INNER_JAKTIM: StandbySchedule = {
 
 export const INITIAL_SCHEDULE_OUTER_BEKASI: StandbySchedule = {
   id: 'mbp-outer-bekasi',
-  title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* BEKASI 28-10-2026',
+  title: 'JADWAL STANDBY TEAM MBP *DEPOTEL* BEKASI RABU, 28-10-2026',
   headerTitle: 'JADWAL STANDBY TEAM MBP DEPOTEL BEKASI',
+  subBadgeTitle: 'DEPOTEL BEKASI',
+  titleFormatStyle: 'day_comma_date',
   nopName: 'NOP BEKASI',
   date: '28-10-2026',
   dayName: 'Rabu',
