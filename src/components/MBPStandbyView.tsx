@@ -81,9 +81,10 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
   const [activeTab, setActiveTab] = useState<'all' | 'inner' | 'outer'>('all');
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [deletePersonnelTarget, setDeletePersonnelTarget] = useState<PersonnelDeleteTarget | null>(null);
+  const [isViewingCustomDate, setIsViewingCustomDate] = useState(false);
 
   // Apply real-time date change across BOTH schedules and recalculate shift patterns automatically
-  const handleDateChange = (newDateDDMMYYYY: string) => {
+  const handleDateChange = (newDateDDMMYYYY: string, forceResetOverrides = true) => {
     const newDayName = getIndonesianDayName(newDateDDMMYYYY);
 
     const updateScheduleWithDate = (sched: StandbySchedule, defaultAreaName: string) => {
@@ -110,18 +111,34 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
         isCustomTitle: sched.isCustomTitle ?? false
       };
 
-      // Automatically recalculate work & holiday statuses based on shift cycle!
-      return applyAutoShiftToSchedule(updatedSched);
+      // Automatically recalculate work & holiday statuses based on shift cycle for newDateDDMMYYYY
+      return applyAutoShiftToSchedule(updatedSched, forceResetOverrides);
     };
 
     onUpdateInnerSchedule(updateScheduleWithDate(innerSchedule, 'INNER JAKTIM'));
     onUpdateOuterSchedule(updateScheduleWithDate(outerSchedule, 'BEKASI'));
-
-    onShowToast(`Format Judul WA & Jadwal otomatis mengikuti kalender: ${newDayName.toUpperCase()}, ${newDateDDMMYYYY}! 🔄`);
   };
 
+  // REAL-TIME AUTO-SYNC: Automatically keep schedules & Format Judul WA synchronized to live system clock
+  useEffect(() => {
+    if (!isViewingCustomDate && clock.dateStrDDMMYYYY) {
+      if (innerSchedule.date !== clock.dateStrDDMMYYYY || outerSchedule.date !== clock.dateStrDDMMYYYY) {
+        handleDateChange(clock.dateStrDDMMYYYY, true);
+      }
+    }
+  }, [clock.dateStrDDMMYYYY, isViewingCustomDate]);
+
   const handleSetTodayRealtime = () => {
-    handleDateChange(clock.dateStrDDMMYYYY);
+    setIsViewingCustomDate(false);
+    handleDateChange(clock.dateStrDDMMYYYY, true);
+    onShowToast(`Sistem disinkronkan ke Waktu & Tanggal Real-Time Live: ${clock.dayName.toUpperCase()}, ${clock.dateStrDDMMYYYY}! 🟢`);
+  };
+
+  const handleSelectCustomDate = (newDateDDMMYYYY: string) => {
+    setIsViewingCustomDate(true);
+    handleDateChange(newDateDDMMYYYY, true);
+    const dayName = getIndonesianDayName(newDateDDMMYYYY);
+    onShowToast(`Format Judul WA & Jadwal disesuaikan ke Tanggal Kalender: ${dayName.toUpperCase()}, ${newDateDDMMYYYY}! 🔄`);
   };
 
   const handleRecalculateShifts = (target: 'inner' | 'outer') => {
@@ -317,7 +334,7 @@ export const MBPStandbyView: React.FC<MBPStandbyViewProps> = ({
         isOpen={isCalendarModalOpen}
         onClose={() => setIsCalendarModalOpen(false)}
         currentDateDDMMYYYY={innerSchedule.date || clock.dateStrDDMMYYYY}
-        onSelectDate={handleDateChange}
+        onSelectDate={handleSelectCustomDate}
       />
 
       {/* Personnel Delete Modal */}

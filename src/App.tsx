@@ -19,7 +19,8 @@ import { AccountModal } from './components/AccountModal';
 import {
   formatStandbyScheduleToWA,
   formatCombinedStandbyScheduleToWA,
-  buildAutoWATitle
+  buildAutoWATitle,
+  updateTitleDateAndDay
 } from './utils/whatsappFormatter';
 import { getIndonesianDayName } from './utils/dateUtils';
 import { applyAutoShiftToSchedule } from './utils/shiftScheduleCalculator';
@@ -68,21 +69,24 @@ const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
 
   const dateStr = sched.date || '29-10-2026';
   const dayName = sched.dayName || getIndonesianDayName(dateStr);
-  const autoTitle = buildAutoWATitle({
-    ...sched,
-    date: dateStr,
-    dayName: dayName
-  }, sched.titleFormatStyle || 'day_comma_date');
 
-  // Strictly preserve saved title so user changes remain permanent even across page refreshes
-  const finalTitle = sched.title && sched.title.trim().length > 0 ? sched.title : autoTitle;
+  let finalTitle = sched.title;
+  if (!finalTitle || finalTitle.trim().length === 0) {
+    finalTitle = buildAutoWATitle({
+      ...sched,
+      date: dateStr,
+      dayName: dayName
+    }, 'day_comma_date');
+  } else {
+    finalTitle = updateTitleDateAndDay(finalTitle, dayName, dateStr, 'INNER JAKTIM');
+  }
 
   const normalized: StandbySchedule = {
     ...sched,
     date: dateStr,
     dayName: dayName,
     title: finalTitle,
-    isCustomTitle: sched.isCustomTitle ?? (sched.title ? true : false),
+    isCustomTitle: sched.isCustomTitle ?? true,
     headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL INNER JAKTIM',
     subBadgeTitle: sched.subBadgeTitle || 'DEPOTEL INNER JAKTIM',
     nopName: nop,
@@ -94,21 +98,24 @@ const normalizeInnerSchedule = (sched: StandbySchedule): StandbySchedule => {
 const normalizeOuterSchedule = (sched: StandbySchedule): StandbySchedule => {
   const dateStr = sched.date || '28-10-2026';
   const dayName = sched.dayName || getIndonesianDayName(dateStr);
-  const autoTitle = buildAutoWATitle({
-    ...sched,
-    date: dateStr,
-    dayName: dayName
-  }, sched.titleFormatStyle || 'day_comma_date');
 
-  // Strictly preserve saved title so user changes remain permanent even across page refreshes
-  const finalTitle = sched.title && sched.title.trim().length > 0 ? sched.title : autoTitle;
+  let finalTitle = sched.title;
+  if (!finalTitle || finalTitle.trim().length === 0) {
+    finalTitle = buildAutoWATitle({
+      ...sched,
+      date: dateStr,
+      dayName: dayName
+    }, 'day_comma_date');
+  } else {
+    finalTitle = updateTitleDateAndDay(finalTitle, dayName, dateStr, 'BEKASI');
+  }
 
   const normalized: StandbySchedule = {
     ...sched,
     date: dateStr,
     dayName: dayName,
     title: finalTitle,
-    isCustomTitle: sched.isCustomTitle ?? (sched.title ? true : false),
+    isCustomTitle: sched.isCustomTitle ?? true,
     headerTitle: sched.headerTitle || 'JADWAL STANDBY TEAM MBP DEPOTEL BEKASI',
     subBadgeTitle: sched.subBadgeTitle || 'DEPOTEL BEKASI',
     nopName: sched.nopName || 'NOP BEKASI'
